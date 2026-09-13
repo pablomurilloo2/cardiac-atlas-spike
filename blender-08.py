@@ -18,11 +18,12 @@ random.seed(8)
 # ---------- escena limpia ----------
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
-scene.render.engine = 'BLENDER_EEVEE_NEXT' if hasattr(bpy.types, 'RenderSettings') else 'BLENDER_EEVEE'
-try:
-    scene.render.engine = 'BLENDER_EEVEE_NEXT'
-except Exception:
-    scene.render.engine = 'BLENDER_EEVEE'
+for eng in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'):
+    try:
+        scene.render.engine = eng
+        break
+    except TypeError:
+        continue
 scene.render.resolution_x = 1280
 scene.render.resolution_y = 720
 scene.render.fps = 24
@@ -90,14 +91,14 @@ ni, no = ng.nodes.new('NodeGroupInput'), ng.nodes.new('NodeGroupOutput')
 ng.interface.new_socket('Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
 ng.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
 m2p = ng.nodes.new('GeometryNodeMeshToPoints')
-m2p.inputs['Radius'].default_value = 0.0035
+m2p.inputs['Radius'].default_value = 0.0018
 setm = ng.nodes.new('GeometryNodeSetMaterial')
 nmat = bpy.data.materials.new('neuron')
 nmat.use_nodes = True
 nb = nmat.node_tree.nodes['Principled BSDF']
 if 'Emission Color' in nb.inputs:
     nb.inputs['Emission Color'].default_value = (0.65, 0.85, 1.0, 1)
-    nb.inputs['Emission Strength'].default_value = 14.0
+    nb.inputs['Emission Strength'].default_value = 2.2
 nb.inputs['Base Color'].default_value = (0.4, 0.7, 1.0, 1)
 setm.inputs['Material'].default_value = nmat
 ng.links.new(ni.outputs[0], m2p.inputs['Mesh'])
@@ -106,7 +107,7 @@ ng.links.new(setm.outputs['Geometry'], no.inputs[0])
 
 # ---------- luz y camara ----------
 key = bpy.data.objects.new('key', bpy.data.lights.new('key', 'AREA'))
-key.data.energy = 900; key.data.size = 6
+key.data.energy = 420; key.data.size = 6
 key.location = (4, -3, 4)
 scene.collection.objects.link(key)
 
@@ -115,7 +116,7 @@ scene.collection.objects.link(cam)
 scene.camera = cam
 center = (lo + hi) / 2
 import math
-radius = (hi - lo).length * 0.9
+radius = (hi - lo).length * 1.55
 for f in range(1, FRAMES + 1):
     a = 2 * math.pi * (f / FRAMES) * 0.35 + 0.6
     cam.location = (center.x + radius * math.sin(a), center.y - radius * math.cos(a),
@@ -125,22 +126,45 @@ for f in range(1, FRAMES + 1):
     cam.keyframe_insert('location', frame=f)
     cam.keyframe_insert('rotation_euler', frame=f)
 
-# bloom (Eevee Next: compositor glare)
-scene.use_nodes = True
-nt = scene.node_tree
-for n in list(nt.nodes): nt.nodes.remove(n)
-rl = nt.nodes.new('CompositorNodeRLayers')
-glare = nt.nodes.new('CompositorNodeGlare')
-glare.glare_type = 'FOG_GLOW'; glare.threshold = 0.6
-comp = nt.nodes.new('CompositorNodeComposite')
-nt.links.new(rl.outputs['Image'], glare.inputs['Image'])
-nt.links.new(glare.outputs['Image'], comp.inputs['Image'])
+# bloom via compositor: la API cambia entre versiones -> mejor esfuerzo
+try:
+    if hasattr(scene, 'node_tree') and scene.node_tree is not None:
+        nt = scene.node_tree
+    else:
+        nt = bpy.data.node_groups.new('comp', 'CompositorNodeTree')
+        scene.compositing_node_group = nt
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    rl = nt.nodes.new('CompositorNodeRLayers')
+    glare = nt.nodes.new('CompositorNodeGlare')
+    for attr in ('glare_type', 'mode'):
+        try: setattr(glare, attr, 'FOG_GLOW'); break
+        except Exception: continue
+    for setter in (lambda: setattr(glare, 'threshold', 1.0),
+                   lambda: glare.inputs.__setitem__('Threshold', None)):
+        pass
+    try: glare.threshold = 1.0
+    except Exception: pass
+    try: glare.inputs['Threshold'].default_value = 1.0
+    except Exception: pass
+    try: glare.inputs['Strength'].default_value = 0.35
+    except Exception: pass
+    try:
+        comp = nt.nodes.new('CompositorNodeComposite')
+        out_in = comp.inputs['Image']
+    except Exception:
+        nt.interface.new_socket('Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+        comp = nt.nodes.new('NodeGroupOutput')
+        out_in = comp.inputs[0]
+    nt.links.new(rl.outputs['Image'], glare.inputs['Image'])
+    nt.links.new(glare.outputs['Image'], out_in)
+    print('bloom ok')
+except Exception as e:
+    print('sin bloom:', e)
 
-scene.render.image_settings.file_format = 'FFMPEG'
-scene.render.ffmpeg.format = 'MPEG4'
-scene.render.ffmpeg.codec = 'H264'
-scene.render.ffmpeg.constant_rate_factor = 'MEDIUM'
-scene.render.filepath = OUT
+# Blender 5 ya no codifica video directo: PNGs y ensamblar con ffmpeg afuera
+scene.render.image_settings.file_format = 'PNG'
+scene.render.filepath = OUT  # aqui OUT es un prefijo de carpeta/frames
 print('render ->', OUT)
 bpy.ops.render.render(animation=True)
 print('LISTO')
