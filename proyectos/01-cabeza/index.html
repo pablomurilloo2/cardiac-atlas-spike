@@ -84,7 +84,7 @@
   <header class="hdr">
     <div class="eyebrow">Atlas interactivo · local</div>
     <h1>Cabeza</h1>
-    <div class="meta"><span id="count">…</span> piezas · BodyParts3D · <a href="./">portada</a></div>
+    <div class="meta"><span id="count">…</span> piezas · BodyParts3D · <a href="../">proyectos</a></div>
   </header>
   <div class="hint">arrastra: rotar · rueda: zoom · doble clic: enfocar · tecla 0: vista general</div>
 
@@ -112,7 +112,7 @@
 </div>
 
 <script type="module">
-import * as THREE from './vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 /* Ventrículos cerebrales que BodyParts3D clasifica como "cardiac": aquí SÍ van. */
 const BRAIN_VENTRICLES = new Set(['FMA78449', 'FMA78450', 'FMA78469', 'FMA78454', 'FMA75351']);
@@ -153,8 +153,8 @@ scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0x8a8f9e, 0.9), new THRE
 const root = new THREE.Group();
 scene.add(root);
 
-const manifest = await fetch('./anatomy-full.json').then((r) => r.json());
-const bin = await fetch('./anatomy-full.bin').then((r) => r.arrayBuffer());
+const manifest = await fetch('../../anatomy-full.json').then((r) => r.json());
+const bin = await fetch('../../anatomy-full.bin').then((r) => r.arrayBuffer());
 
 /* filtrar a la cabeza por centroide muestreado */
 const meshes = [];

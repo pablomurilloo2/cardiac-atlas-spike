@@ -1,0 +1,29 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas de ADN — variantes sobre el cuerpo</title>
+<style>
+  body { margin:0; background:#FAFAFB; color:#111827; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+         display:flex; min-height:100dvh; align-items:center; justify-content:center; }
+  .card { max-width:600px; padding:40px 44px; background:#fff; border:1px solid #E5E7EB; border-radius:16px;
+          box-shadow:0 8px 30px rgba(17,24,39,.06); margin:20px; }
+  .eyebrow { font-family:ui-monospace,Menlo,monospace; font-size:10px; text-transform:uppercase;
+             letter-spacing:.14em; color:#9CA3AF; }
+  h1 { font-size:22px; margin:6px 0 10px; letter-spacing:-.02em; }
+  p { font-size:13.5px; line-height:1.6; color:#4B5563; }
+  .src { font-family:ui-monospace,Menlo,monospace; font-size:11px; }
+  .src a { color:#2563EB; }
+  ul { font-size:13px; color:#4B5563; line-height:1.7; padding-left:18px; }
+  .tag { display:inline-block; font-family:ui-monospace,Menlo,monospace; font-size:10px;
+         background:#FEF3C7; color:#92400E; border-radius:20px; padding:2px 10px; margin-bottom:8px; }
+  a.back { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#6B7280; }
+</style>
+<div class="card">
+  <div class="eyebrow">Proyecto 06 · por implementar</div>
+  <h1>Atlas de ADN — variantes sobre el cuerpo</h1>
+  <span class="tag">requiere tus datos crudos de ADN</span>
+  <p>Datos crudos de un chip (23andMe/Ancestry, ~660.000 variantes) mapeados sobre el cuerpo: cada rasgo o riesgo documentado, anclado al órgano que afecta. Mismo patrón que tu esquema de condición: archivo local anónimo → hallazgos por estructura.</p>
+  <p class="src">Fuente: <a href="https://x.com/ZentrixHQ/status/2097979077239914967" target="_blank">x.com/ZentrixHQ/…4967</a></p>
+  <strong style="font-size:12px">Plan de implementación</strong>
+  <ul><li>Si tienes un raw data export de algún servicio de ADN, se parsea local (nunca sale del Mac)</li><li>Cruce con ClinVar/SNPedia descargados localmente</li><li>Los hallazgos se vuelcan al mismo condicion.json con grupo "Genética"</li><li>La ética primero: solo variantes de significado establecido, sin alarmismo</li></ul>
+  <a class="back" href="../">← volver a proyectos</a>
+</div>
