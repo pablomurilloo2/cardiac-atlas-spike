@@ -1,314 +1,214 @@
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Viaje por el cuerpo — recorrido guiado</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El torrente — un viaje por el cuerpo</title>
+
 <style>
   :root {
-    --navy: #0A0D36; --peri: #BACFFF; --ink: #E4EBFC; --dim: #97A1CC; --muted: #626C9C;
-    --card: #101230; --line: #262a55;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --cream: #F4EFE6; --ink: #241E14; --mut: #8A7E6A; --faint: #A89C88;
+    --mono: ui-monospace, Menlo, monospace;
+    --serif: Georgia, "Times New Roman", serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100dvh; background: #F4EFE6; color: var(--navy);
-         font-family: var(--sans); font-size: 13px; -webkit-font-smoothing: antialiased; }
-  .shell { display: grid; grid-template-columns: 250px minmax(0,1fr); min-height: 100dvh; }
-  @media (max-width: 760px) { .shell { grid-template-columns: 1fr; } }
+  body { margin: 0; background: var(--cream); color: var(--ink); overflow: hidden;
+         font-family: var(--serif); }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%;
+           cursor: pointer; }
 
-  aside { background: var(--card); color: var(--ink); border-right: 1px solid var(--line);
-          padding: 15px; display: flex; flex-direction: column; gap: 15px;
-          overflow-y: auto; max-height: 100dvh; }
-  @media (max-width: 760px) { aside { max-height: none; } }
-  h1 { font-size: 13px; margin: 0; letter-spacing: -0.01em; }
-  .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
-  .gl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted);
-        font-family: var(--mono); display: block; margin-bottom: 6px; }
-  .tg { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px;
-        color: var(--dim); cursor: pointer; user-select: none; padding: 2px 0; }
-  .tg input { accent-color: var(--peri); width: 14px; height: 14px; margin: 0; }
-  .sw { width: 11px; height: 11px; border-radius: 2px; flex: none; }
-  input[type="range"] { width: 100%; accent-color: var(--peri); }
-  .cite { font-size: 10px; line-height: 1.5; color: var(--muted);
-          border-left: 2px solid var(--line); padding-left: 9px; }
-  .stat { font-family: var(--mono); font-size: 10.5px; line-height: 1.7; color: var(--dim); }
-  .stat b { color: var(--peri); }
-  a.back { color: var(--peri); font-family: var(--mono); font-size: 11px; text-decoration: none; }
+  .titles { position: fixed; left: 50%; top: 11%; transform: translateX(-50%); z-index: 3;
+            text-align: center; pointer-events: none; max-width: 640px; width: 90%; }
+  .titles .ey { font: 9.5px var(--mono); letter-spacing: 0.26em; color: var(--faint);
+                text-transform: uppercase; margin-bottom: 12px; opacity: 0;
+                transition: opacity 1.2s ease; }
+  .titles h1 { margin: 0; font: italic 600 46px/1.08 var(--serif); letter-spacing: -0.01em;
+               opacity: 0; transition: opacity 1.2s ease, transform 1.2s ease;
+               transform: translateY(8px); }
+  .titles p { margin: 12px 0 0; font: italic 16px/1.6 var(--serif); color: var(--mut);
+              opacity: 0; transition: opacity 1.2s ease 0.25s; }
+  .titles.show .ey, .titles.show h1, .titles.show p { opacity: 1; }
+  .titles.show h1 { transform: none; }
 
-  .stage { position: relative; min-height: 100dvh; }
-  @media (max-width: 760px) { .stage { min-height: 70dvh; } }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; position: absolute; inset: 0; }
-  canvas.dragging { cursor: grabbing; }
-  .readout {
-    position: absolute; bottom: 12px; left: 12px; right: 12px; max-width: 520px;
-    font-family: var(--mono); font-size: 11px; color: var(--ink);
-    background: rgba(10,13,54,0.85); backdrop-filter: blur(6px);
-    padding: 7px 10px; border-radius: 5px; pointer-events: none;
-    border: 1px solid rgba(186,207,255,0.2); min-height: 28px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-             font-family: var(--mono); font-size: 12px; color: #7A83A8; background: #fff; }
+  .corner { position: fixed; top: 18px; left: 22px; z-index: 3; font: 10px var(--mono);
+            letter-spacing: 0.08em; color: var(--faint); }
+  .corner a { color: var(--faint); }
+  .credit { position: fixed; bottom: 16px; right: 20px; z-index: 3; font: 9px var(--mono);
+            color: var(--faint); text-align: right; line-height: 1.6; }
+  .hint { position: fixed; bottom: 16px; left: 22px; z-index: 3; font: 10px var(--mono);
+          letter-spacing: 0.08em; color: var(--faint); transition: opacity 0.6s ease; }
+  .progress { position: fixed; left: 0; right: 0; bottom: 0; height: 2px; z-index: 3;
+              background: rgba(36,30,20,0.08); }
+  .progress i { display: block; height: 100%; width: 0; background: #A6403D; }
+  .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             font: 12px var(--mono); color: var(--faint); background: var(--cream); z-index: 9; }
 </style>
 
-<div class="shell">
-  <aside>
-    <div>
-      <h1>Viaje por el cuerpo</h1>
-      <div class="sub">recorrido cinematográfico · fuente: x.com/ZentrixHQ/status/2099051720298922284</div>
-    </div>
-    <a class="back" href="../">← proyectos</a>
+<canvas id="gl"></canvas>
 
-    <div>
-      <span class="gl">Capas</span>
-      <label class="tg"><input type="checkbox" id="lyArt" checked> <span class="sw" style="background:#A6403D"></span> Arterias</label>
-      <label class="tg"><input type="checkbox" id="lyVen" checked> <span class="sw" style="background:#47609F"></span> Venas</label>
-      <label class="tg"><input type="checkbox" id="lyHeart" checked> <span class="sw" style="background:#C69B92"></span> Corazón</label>
-      <label class="tg"><input type="checkbox" id="lySkin" checked> <span class="sw" style="background:#E7DDD6"></span> Silueta corporal</label>
-      <label class="tg" style="margin-top:8px">Opacidad de la silueta</label>
-      <input type="range" id="skinT" min="2" max="30" value="7" aria-label="Opacidad de la silueta corporal">
-    </div>
-
-    <div>
-      <span class="gl">Render</span>
-      <div class="stat" id="stat">cargando…</div>
-    </div>
-
-    <div class="cite">
-      BodyParts3D, © The Database Center for Life Science, CC Attribution 4.0 International.
-      Anatomía de referencia de un adulto masculino — no representa a ningún paciente.
-      Vista de orientación y comunicación; el trabajo de caso vive en el atlas cardiaco.
-    </div>
-  </aside>
-
-  <main class="stage">
-    <div id="stageText" style="position:absolute;left:50%;top:14%;transform:translateX(-50%);
-      z-index:3;text-align:center;pointer-events:none;max-width:520px;opacity:0;transition:opacity 600ms ease">
-      <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:#A89C88;text-transform:uppercase;margin-bottom:8px">A journey through the body</div>
-      <div id="stTitle" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:600;font-size:40px;letter-spacing:-0.01em;color:#241E14;line-height:1.1"></div>
-      <div id="stBody" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:15px;color:#8A7E6A;margin-top:10px;line-height:1.55"></div>
-    </div>
-    <div style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;
-      display:flex;gap:8px;background:rgba(255,255,255,.94);border:1px solid #E5E7EB;
-      border-radius:999px;padding:8px 14px;box-shadow:0 8px 30px rgba(17,24,39,.08)">
-      <button id="tPrev" style="font-family:var(--mono);font-size:12px;border:1px solid #E5E7EB;background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer">‹</button>
-      <button id="tPlay" style="font-family:var(--mono);font-size:12px;border:1px solid #111827;background:#111827;color:#fff;border-radius:8px;padding:6px 16px;cursor:pointer">▶ Iniciar viaje</button>
-      <button id="tNext" style="font-family:var(--mono);font-size:12px;border:1px solid #E5E7EB;background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer">›</button>
-    </div>
-    <canvas id="gl"></canvas>
-    <div class="readout" id="readout"><span style="color:#7A83A8">Pasa el cursor sobre un vaso</span></div>
-    <div class="loading" id="loading">descargando anatomía (17 MB)…</div>
-  </main>
+<div class="titles" id="titles">
+  <div class="ey">A journey through the body</div>
+  <h1 id="tT"></h1>
+  <p id="tB"></p>
 </div>
+<div class="corner">PROYECTO 03 · <a href="../">← proyectos</a> ·
+  <a href="https://x.com/ZentrixHQ/status/2099051720298922284" target="_blank" rel="noreferrer">fuente ↗</a></div>
+<div class="hint" id="hint">CLIC PARA PAUSAR · RUEDA PARA ACERCAR</div>
+<div class="credit">BodyParts3D © DBCLS · CC BY 4.0<br>1.066 vasos · anatomía de referencia</div>
+<div class="progress"><i id="bar"></i></div>
+<div class="loading" id="loading">preparando el torrente…</div>
 
 <script type="module">
 import * as THREE from '../../vendor/three.module.min.js';
-
-const COLORS = {
-  arterial: '#A6403D',
-  venous: '#47609F',
-  cardiac: '#C69B92',
-  integumentary: '#E7DDD6',
-};
-
 const $ = (id) => document.getElementById(id);
-const canvas = $('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setClearColor(0xF4EFE6, 1);   /* crema cinematico como el video */
+
+const COLORS = { arterial: '#A6403D', venous: '#47609F', cardiac: '#C69B92', integumentary: '#E7DDD6' };
+
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
+renderer.setClearColor(0xF4EFE6, 1);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
-
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 30);
-const key = new THREE.DirectionalLight(0xfff4ec, 1.6); key.position.set(3, 4, 3);
-const rim = new THREE.DirectionalLight(0xdfe8ff, 0.7); rim.position.set(-4, 1, -3);
-scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0x8a8f9e, 0.9), new THREE.AmbientLight(0xffffff, 0.3));
-
-const root = new THREE.Group();
-scene.add(root);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.005, 12);
+const key = new THREE.DirectionalLight(0xFFF6E8, 1.5); key.position.set(3, 4, 3);
+const rim = new THREE.DirectionalLight(0xD8E2F4, 0.6); rim.position.set(-4, 1, -3);
+scene.add(key, rim, new THREE.HemisphereLight(0xFFFFFF, 0x9A8F7C, 0.85), new THREE.AmbientLight(0xffffff, 0.28));
+const root = new THREE.Group(); scene.add(root);
 
 const manifest = await fetch('../../body-subset.json').then((r) => r.json());
-$('loading').textContent = 'preparando 1.066 mallas…';
+$('loading').textContent = 'preparando 1.066 vasos…';
 const bin = await fetch('../../body-subset.bin').then((r) => r.arrayBuffer());
 
-const meshes = [];
 const bySystem = { arterial: [], venous: [], cardiac: [], integumentary: [] };
 const bbox = new THREE.Box3();
-
 for (const p of manifest.parts) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
   g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
   g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
   g.computeBoundingSphere();
-
   const skin = p.system === 'integumentary';
   const mat = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(COLORS[p.system]),
-    roughness: skin ? 0.85 : 0.4,
-    metalness: 0.02,
-    clearcoat: skin ? 0 : 0.45,
-    clearcoatRoughness: 0.3,
-    transparent: skin,
-    opacity: skin ? 0.07 : 1,
-    depthWrite: !skin,
-  });
+    roughness: skin ? 0.85 : 0.42, metalness: 0.02,
+    clearcoat: skin ? 0 : 0.45, clearcoatRoughness: 0.3,
+    transparent: true, opacity: 0, depthWrite: false });
   const mesh = new THREE.Mesh(g, mat);
-  mesh.userData = { part: p, baseColor: mat.color.clone() };
-  mesh.renderOrder = skin ? 2 : 0;   // la silueta se pinta al final, como velo
+  mesh.renderOrder = skin ? 2 : 1;
   root.add(mesh);
-  meshes.push(mesh);
   bySystem[p.system].push(mesh);
   if (!skin) bbox.expandByObject(mesh);
 }
-
 const center = bbox.getCenter(new THREE.Vector3());
 root.position.sub(center);
 const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
+const heartC = (() => {
+  const c = new THREE.Vector3();
+  for (const m of bySystem.cardiac) c.add(m.geometry.boundingSphere.center);
+  return c.divideScalar(bySystem.cardiac.length).sub(center);
+})();
+const topY = bbox.max.y - center.y, botY = bbox.min.y - center.y;
 
-/* órbita */
-const orbit = { az: 0.4, el: 0.05, dist: radius * 2.4 };
-function updateCamera() {
-  const t = orbit.target || { x: 0, y: 0, z: 0 };
-  const ce = Math.cos(orbit.el);
-  camera.position.set(
-    t.x + orbit.dist * ce * Math.sin(orbit.az),
-    t.y + orbit.dist * Math.sin(orbit.el),
-    t.z + orbit.dist * ce * Math.cos(orbit.az));
-  camera.lookAt(t.x, t.y, t.z);
+/* ---------- guion: keyframes del viaje (t en segundos) ---------- */
+/* op = opacidades destino por sistema; el azimut gira continuo aparte */
+const KF = [
+  { t: 0,  el: 0.06, dist: 0.34, ty: heartC.y, op: { cardiac: 1, arterial: 0, venous: 0, integumentary: 0 },
+    T: 'El corazón', B: '— donde empieza la corriente. Late unas 100.000 veces al día.' },
+  { t: 10, el: 0.10, dist: 0.42, ty: heartC.y, op: { cardiac: 1, arterial: 0.25, venous: 0, integumentary: 0 } },
+  { t: 14, el: 0.12, dist: 0.85, ty: heartC.y * 0.6, op: { cardiac: 1, arterial: 1, venous: 0, integumentary: 0 },
+    T: 'El torrente', B: '— un viaje llevado por una sola corriente: sangre a presión hacia cada rincón.' },
+  { t: 24, el: 0.02, dist: 1.05, ty: botY * 0.45, op: { cardiac: 1, arterial: 1, venous: 0, integumentary: 0 } },
+  { t: 30, el: -0.04, dist: 0.8, ty: botY * 0.62, op: { cardiac: 0.9, arterial: 1, venous: 0.15, integumentary: 0 } },
+  { t: 34, el: 0.02, dist: 0.95, ty: botY * 0.4, op: { cardiac: 0.9, arterial: 0.22, venous: 1, integumentary: 0 },
+    T: 'El retorno', B: '— el camino de vuelta: las venas recogen la corriente y la devuelven al corazón.' },
+  { t: 46, el: 0.14, dist: 0.6, ty: heartC.y * 0.9, op: { cardiac: 1, arterial: 0.22, venous: 1, integumentary: 0 } },
+  { t: 52, el: 0.10, dist: 1.55, ty: heartC.y * 0.25, op: { cardiac: 1, arterial: 1, venous: 1, integumentary: 0.075 },
+    T: 'El sistema entero', B: '— unos 100.000 km de vasos dentro de una sola silueta humana.' },
+  { t: 68, el: 0.04, dist: 1.7, ty: 0, op: { cardiac: 1, arterial: 1, venous: 1, integumentary: 0.075 } },
+  { t: 76, el: 0.06, dist: 1.0, ty: heartC.y * 0.8, op: { cardiac: 1, arterial: 0.5, venous: 0.5, integumentary: 0.04 },
+    T: '', B: '' },
+  { t: 82, el: 0.06, dist: 0.36, ty: heartC.y, op: { cardiac: 1, arterial: 0, venous: 0, integumentary: 0 } },
+];
+const DUR = KF[KF.length - 1].t;
+const ease = (x) => x * x * (3 - 2 * x);
+function sample(t) {
+  let i = 0;
+  while (i < KF.length - 2 && KF[i + 1].t <= t) i++;
+  const a = KF[i], b = KF[i + 1];
+  const u = ease(Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))));
+  const L = (x, y) => x + (y - x) * u;
+  const op = {};
+  for (const k in a.op) op[k] = L(a.op[k], b.op[k]);
+  return { el: L(a.el, b.el), dist: L(a.dist, b.dist), ty: L(a.ty, b.ty), op };
 }
-let dragging = false, lastX = 0, lastY = 0;
-canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener('pointerup', (e) => { dragging = false; canvas.classList.remove('dragging'); canvas.releasePointerCapture(e.pointerId); });
-canvas.addEventListener('pointermove', (e) => {
-  if (dragging) {
-    orbit.az -= (e.clientX - lastX) * 0.005;
-    orbit.el = Math.max(-1.3, Math.min(1.3, orbit.el + (e.clientY - lastY) * 0.005));
-    lastX = e.clientX; lastY = e.clientY;
-    updateCamera();
-  } else { hover(e); }
+/* titulo activo segun el ultimo keyframe con texto */
+let shownTitle = null;
+function updateTitle(t) {
+  let cur = null;
+  for (const k of KF) if (k.t <= t && k.T !== undefined) cur = k;
+  const id = cur ? cur.T : null;
+  if (id === shownTitle) return;
+  shownTitle = id;
+  if (!cur || !cur.T) { $('titles').classList.remove('show'); return; }
+  $('tT').textContent = cur.T;
+  $('tB').textContent = cur.B;
+  $('titles').classList.add('show');
+}
+
+/* ---------- reproduccion ---------- */
+let playing = true, t = 0, zoomBias = 1, hintFade = 0;
+renderer.domElement.addEventListener('click', () => {
+  playing = !playing;
+  $('hint').textContent = playing ? 'CLIC PARA PAUSAR · RUEDA PARA ACERCAR'
+                                  : 'PAUSADO — CLIC PARA SEGUIR · ARRASTRA PARA MIRAR';
 });
-canvas.addEventListener('wheel', (e) => {
+renderer.domElement.addEventListener('wheel', (e) => {
   e.preventDefault();
-  orbit.dist = Math.max(radius * 0.25, Math.min(radius * 5, orbit.dist + e.deltaY * radius * 0.002));
-  updateCamera();
+  zoomBias = Math.max(0.45, Math.min(2.2, zoomBias * Math.exp(e.deltaY * 0.0015)));
 }, { passive: false });
-
-/* hover: sólo contra vasos y corazón, nunca contra la silueta */
-const raycaster = new THREE.Raycaster();
-const ndc = new THREE.Vector2();
-let hovered = null;
-function hover(e) {
-  const r = canvas.getBoundingClientRect();
-  ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-  ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-  raycaster.setFromCamera(ndc, camera);
-  const targets = meshes.filter((m) => m.visible && m.userData.part.system !== 'integumentary');
-  const hits = raycaster.intersectObjects(targets, false);
-  const hit = hits.length ? hits[0].object : null;
-  if (hit === hovered) return;
-  if (hovered) hovered.material.color.copy(hovered.userData.baseColor);
-  hovered = hit;
-  const el = $('readout');
-  if (hovered) {
-    hovered.material.color.copy(hovered.userData.baseColor).offsetHSL(0, 0.06, 0.14);
-    const p = hovered.userData.part;
-    el.innerHTML = `<span class="sw" style="background:${COLORS[p.system]}"></span>` +
-      `<span>${p.name}</span>` +
-      `<span style="margin-left:auto;color:#7A83A8;font-size:10px">${p.fma} · ${p.system}</span>`;
-  } else {
-    el.innerHTML = '<span style="color:#7A83A8">Pasa el cursor sobre un vaso</span>';
-  }
-}
-
-/* capas */
-const wire = (id, group) => $(id).addEventListener('change', (e) => {
-  for (const m of bySystem[group]) m.visible = e.target.checked;
-});
-wire('lyArt', 'arterial'); wire('lyVen', 'venous'); wire('lyHeart', 'cardiac'); wire('lySkin', 'integumentary');
-$('skinT').addEventListener('input', (e) => {
-  for (const m of bySystem.integumentary) m.material.opacity = e.target.value / 100;
+/* en pausa se puede mirar alrededor */
+let dragging = false, lastX = 0, lastY = 0, azOff = 0, elOff = 0;
+renderer.domElement.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+addEventListener('pointerup', () => { dragging = false; });
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!dragging || playing) return;
+  azOff -= (e.clientX - lastX) * 0.005;
+  elOff = Math.max(-0.9, Math.min(0.9, elOff + (e.clientY - lastY) * 0.004));
+  lastX = e.clientX; lastY = e.clientY;
 });
 
 function fit() {
-  const r = canvas.parentElement.getBoundingClientRect();
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
-  renderer.setSize(r.width, r.height, false);
-  camera.aspect = r.width / r.height;
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  updateCamera();
 }
 addEventListener('resize', fit);
 
-let frames = [], lastT = performance.now(), statT = 0;
+let lastNow = performance.now();
 function loop() {
   requestAnimationFrame(loop);
   const now = performance.now();
-  frames.push(now - lastT); lastT = now;
-  if (frames.length > 240) frames.shift();
-  renderer.render(scene, camera);
-  if (now - statT > 600) {
-    statT = now;
-    const sorted = [...frames].sort((a, b) => a - b);
-    const p99 = sorted[Math.floor(sorted.length * 0.99)] || 1;
-    const mean = frames.reduce((a, b) => a + b, 0) / frames.length;
-    const info = renderer.info.render;
-    $('stat').innerHTML = `<b>${(1000 / mean).toFixed(0)}</b> fps · <b>${(1000 / p99).toFixed(0)}</b> 1% low<br>` +
-      `${(info.triangles / 1000).toFixed(0)}k tri · ${info.calls} draws`;
+  const dtReal = (now - lastNow) / 1000; lastNow = now;
+  const dt = Math.min(0.1, dtReal);   // para lerps estables
+  if (playing) {
+    t = (t + Math.min(1.5, dtReal)) % DUR;   // el guion sigue el reloj real aunque el rAF se acelere o frene
+    azOff *= 0.97; elOff *= 0.97;   // vuelve suave al encuadre del guion
   }
-}
+  const s = sample(t);
+  updateTitle(t);
+  $('bar').style.width = (100 * t / DUR) + '%';
 
-/* ---------- recorrido por etapas ---------- */
-const sysCenter = (name) => {
-  const arr = bySystem[name] || [];
-  const c = new THREE.Vector3();
-  let n = 0;
-  for (const m of arr) { c.add(m.geometry.boundingSphere.center); n++; }
-  return n ? c.divideScalar(n).sub(center) : new THREE.Vector3();
-};
-const heartC = sysCenter('cardiac');
-const STAGES = [
-  { t: 'El corazón', b: '— donde empieza la corriente. Late unas 100.000 veces al día.',
-    az: 0.4, el: 0.05, dist: 0.42, target: heartC, show: ['cardiac'] },
-  { t: 'El torrente', b: '— un viaje llevado por una sola corriente: sangre oxigenada a presión hacia cada rincón.',
-    az: 0.15, el: 0.02, dist: 1.15, target: new THREE.Vector3(0, 0, 0), show: ['cardiac', 'arterial'] },
-  { t: 'El retorno', b: '— el camino de vuelta: las venas recogen la corriente y la devuelven al corazón.',
-    az: -0.5, el: 0.03, dist: 1.15, target: new THREE.Vector3(0, 0, 0), show: ['cardiac', 'venous'] },
-  { t: 'El sistema entero', b: '— unos 100.000 km de vasos en un solo cuerpo humano.',
-    az: 0.4, el: 0.05, dist: 1.6, target: new THREE.Vector3(0, 0, 0), show: ['cardiac', 'arterial', 'venous', 'integumentary'] },
-];
-let stage = -1, playing = false, timer = null;
-function goStage(i) {
-  stage = Math.max(0, Math.min(STAGES.length - 1, i));
-  const st = STAGES[stage];
-  for (const [k, arr] of Object.entries(bySystem))
-    for (const m of arr) m.visible = st.show.includes(k);
-  orbit.az = st.az; orbit.el = st.el; orbit.dist = radius * st.dist;
-  orbit.target?.copy ? orbit.target.copy(st.target) : null;
-  updateCamera();
-  $('stTitle').textContent = st.t;
-  $('stBody').textContent = st.b;
-  $('stageText').style.opacity = 1;
-  $('tPlay').textContent = playing ? `∎ ${stage + 1}/${STAGES.length}` : '▶ Iniciar viaje';
+  for (const [k, arr] of Object.entries(bySystem)) {
+    const target = s.op[k];
+    for (const m of arr) m.material.opacity += (target - m.material.opacity) * Math.min(1, dt * 3.5);
+  }
+  const az = 0.55 + t * 0.085 + azOff;    // giro continuo, nunca se detiene
+  const el = s.el + elOff;
+  const dist = s.dist * radius * zoomBias;
+  const ty = s.ty;
+  const ce = Math.cos(el);
+  camera.position.set(dist * ce * Math.sin(az), ty + dist * Math.sin(el), dist * ce * Math.cos(az));
+  camera.lookAt(0, ty, 0);
+  renderer.render(scene, camera);
 }
-function playNext() {
-  if (!playing) return;
-  if (stage >= STAGES.length - 1) { playing = false; $('tPlay').textContent = '▶ Repetir'; return; }
-  goStage(stage + 1);
-  timer = setTimeout(playNext, 6000);
-}
-$('tPlay').addEventListener('click', () => {
-  clearTimeout(timer);
-  playing = !playing;
-  if (playing) { goStage(stage < 0 || stage >= STAGES.length - 1 ? 0 : stage); timer = setTimeout(playNext, 6000); }
-  else $('tPlay').textContent = '▶ Continuar';
-});
-$('tPrev').addEventListener('click', () => { clearTimeout(timer); playing = false; goStage(stage - 1); });
-$('tNext').addEventListener('click', () => { clearTimeout(timer); playing = false; goStage(stage + 1); });
-
-/* la órbita necesita target para las etapas */
-if (!orbit.target) orbit.target = new THREE.Vector3();
-
 fit();
-updateCamera();
 $('loading').remove();
 loop();
 </script>
