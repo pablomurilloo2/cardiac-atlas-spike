@@ -1,29 +1,325 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Espalda biomecánica — fisioterapia en vivo</title>
+<title>Espalda biomecánica — carga y activación muscular</title>
+
 <style>
-  body { margin:0; background:#FAFAFB; color:#111827; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
-         display:flex; min-height:100dvh; align-items:center; justify-content:center; }
-  .card { max-width:600px; padding:40px 44px; background:#fff; border:1px solid #E5E7EB; border-radius:16px;
-          box-shadow:0 8px 30px rgba(17,24,39,.06); margin:20px; }
-  .eyebrow { font-family:ui-monospace,Menlo,monospace; font-size:10px; text-transform:uppercase;
-             letter-spacing:.14em; color:#9CA3AF; }
-  h1 { font-size:22px; margin:6px 0 10px; letter-spacing:-.02em; }
-  p { font-size:13.5px; line-height:1.6; color:#4B5563; }
-  .src { font-family:ui-monospace,Menlo,monospace; font-size:11px; }
-  .src a { color:#2563EB; }
-  ul { font-size:13px; color:#4B5563; line-height:1.7; padding-left:18px; }
-  .tag { display:inline-block; font-family:ui-monospace,Menlo,monospace; font-size:10px;
-         background:#FEF3C7; color:#92400E; border-radius:20px; padding:2px 10px; margin-bottom:8px; }
-  a.back { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#6B7280; }
+  :root {
+    --ink: #111827; --mut: #6B7280; --faint: #9CA3AF;
+    --line: #E5E7EB; --panel: rgba(255,255,255,0.94); --accent: #2563EB;
+    --hot: #D64545;
+    --mono: ui-monospace, Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFB; color: var(--ink); font-family: var(--sans);
+         font-size: 13px; overflow: hidden; }
+  .stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+
+  .hdr { position: absolute; top: 18px; left: 24px; z-index: 3; pointer-events: none; }
+  .eyebrow { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+             letter-spacing: 0.14em; color: var(--faint); }
+  .hdr h1 { margin: 3px 0 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+  .hdr .meta { font-size: 11px; color: var(--mut); }
+  .hdr .meta a { color: var(--mut); pointer-events: auto; }
+
+  .panel { position: absolute; top: 88px; left: 24px; width: 270px; z-index: 3;
+    max-height: calc(100dvh - 120px); overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.07); padding: 14px 16px; }
+  .gl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint);
+        font-family: var(--mono); display: block; margin: 12px 0 6px; }
+  .gl:first-child { margin-top: 0; }
+  .slabel { font-size: 11px; color: var(--mut); display: flex; justify-content: space-between; }
+  .slabel b { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .btns { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pbtn { font-family: var(--mono); font-size: 10px; background: #fff; color: var(--mut);
+          border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; cursor: pointer; }
+  .pbtn:hover { color: var(--ink); border-color: #C7CBD1; }
+  .pbtn.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .bar { margin: 6px 0; }
+  .bar .t { font-size: 11px; display: flex; justify-content: space-between; }
+  .bar .t b { font-family: var(--mono); font-size: 10px; }
+  .bar .track { height: 6px; background: #EDEEF1; border-radius: 4px; overflow: hidden; margin-top: 3px; }
+  .bar .fill { height: 100%; width: 0%; background: linear-gradient(90deg, #7C9BD9, #D64545);
+               border-radius: 4px; transition: width 160ms ease; }
+
+  .gauge { text-align: center; padding: 6px 0 2px; }
+  .gauge .v { font-family: var(--mono); font-size: 30px; font-weight: 700; }
+  .gauge .l { font-size: 10px; color: var(--faint); }
+  .note { font-size: 10px; line-height: 1.5; color: var(--faint); margin-top: 10px; }
+
+  .fig { position: absolute; right: 24px; bottom: 20px; width: 130px; z-index: 3;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.07); padding: 10px; }
+  .fig .cap { font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+              letter-spacing: 0.1em; color: var(--faint); text-align: center; margin-bottom: 4px; }
+  .readout { position: absolute; left: 24px; bottom: 20px; max-width: 440px; z-index: 3;
+    font-family: var(--mono); font-size: 11px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+    box-shadow: 0 6px 22px rgba(17,24,39,0.06); pointer-events: none; }
+  .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: var(--mono); font-size: 12px; color: var(--faint); background: #FAFAFB; z-index: 9; }
 </style>
-<div class="card">
-  <div class="eyebrow">Proyecto 02 · por implementar</div>
-  <h1>Espalda biomecánica — fisioterapia en vivo</h1>
-  <span class="tag">requiere fuente de datos de movimiento</span>
-  <p>Modelo biomecánico de la espalda con los músculos que causan dolor resaltados en vivo (multífidos, erectores). El original conecta un wearable; nuestra versión puede empezar con postura simulada y luego sensores reales (IMU del iPhone).</p>
-  <p class="src">Fuente: <a href="https://x.com/thefountaindead/status/2097089544357327268" target="_blank">x.com/thefountaindead/…7268</a></p>
-  <strong style="font-size:12px">Plan de implementación</strong>
-  <ul><li>Músculos del tronco de BodyParts3D (ya en anatomy-full) con mapa de activación</li><li>Deslizadores de flexión/extensión/rotación como entrada simulada</li><li>Sensor real: WebSocket desde el giroscopio del iPhone (Safari) o wearable BLE</li><li>Conexión natural con la columna segmentada de tu RM ya existente</li></ul>
-  <a class="back" href="../">← volver a proyectos</a>
+
+<div class="stage">
+  <canvas id="gl"></canvas>
+
+  <header class="hdr">
+    <div class="eyebrow">Proyecto 02 · fuente: x.com/thefountaindead/status/2097089544357327268</div>
+    <h1>Espalda biomecánica</h1>
+    <div class="meta">postura → activación muscular y carga discal · <a href="../">← proyectos</a></div>
+  </header>
+
+  <aside class="panel">
+    <span class="gl">Posturas</span>
+    <div class="btns" id="presets"></div>
+
+    <span class="gl">Postura manual</span>
+    <div class="slabel"><span>Flexión del tronco</span><b id="vF">0°</b></div>
+    <input type="range" id="sF" min="0" max="100" value="0">
+    <div class="slabel"><span>Inclinación lateral</span><b id="vL">0°</b></div>
+    <input type="range" id="sL" min="-100" max="100" value="0">
+    <div class="slabel"><span>Carga en las manos</span><b id="vC">0 kg</b></div>
+    <input type="range" id="sC" min="0" max="100" value="0">
+
+    <span class="gl">Presión en el disco L4-L5</span>
+    <div class="gauge"><span class="v" id="gP">100%</span>
+      <div class="l">respecto a estar de pie (Nachemson, 1976)</div></div>
+
+    <span class="gl">Activación muscular</span>
+    <div id="bars"></div>
+
+    <div class="note">Modelo educativo simplificado: activaciones ilustrativas derivadas de
+      principios biomecánicos y presiones discales de los estudios clásicos de Nachemson.
+      No es una medición tuya — para eso haría falta el sensor del original (fase 2:
+      giroscopio del iPhone vía WebSocket).</div>
+  </aside>
+
+  <div class="fig">
+    <div class="cap">Postura</div>
+    <svg id="figSvg" viewBox="0 0 100 120" width="100%"></svg>
+  </div>
+
+  <div class="readout" id="readout">Elige una postura o mueve los deslizadores.</div>
 </div>
+<div class="loading" id="loading">preparando la espalda…</div>
+
+<script type="module">
+import * as THREE from '../../vendor/three.module.min.js';
+
+/* ---------- grupos musculares funcionales (nombres reales del dataset) ---------- */
+const MUSCLES = [
+  { key: 'erectores', es: 'Erectores espinales', color: '#B0685F',
+    match: ['iliocostalis lumborum', 'iliocostalis thoracis', 'longissimus thoracis', 'interspinales lumborum'] },
+  { key: 'psoas', es: 'Psoas mayor', color: '#C08560',
+    match: ['psoas major'] },
+  { key: 'gluteo', es: 'Glúteo mayor', color: '#A05F58',
+    match: ['gluteus maximus'] },
+];
+const SPINE = [
+  { match: 'lumbar vertebra', not: 'disk' }, { match: 'disk of' },
+  { match: 'sacrum' }, { match: 'hip bone' },
+];
+
+const $ = (id) => document.getElementById(id);
+const manifest = await fetch('../../anatomy-full.json').then((r) => r.json());
+const bin = await fetch('../../anatomy-full.bin').then((r) => r.arrayBuffer());
+
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
+renderer.setClearColor(0xFAFAFB, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(34, 1, 0.005, 10);
+const key = new THREE.DirectionalLight(0xfff4ec, 1.6); key.position.set(3, 4, 3);
+const rim = new THREE.DirectionalLight(0xdfe8ff, 0.7); rim.position.set(-4, 1, -3);
+scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0x8a8f9e, 0.9), new THREE.AmbientLight(0xffffff, 0.3));
+const root = new THREE.Group(); scene.add(root);
+
+const meshes = [], byMuscle = {};
+const bbox = new THREE.Box3();
+for (const p of manifest.parts) {
+  const n = p.name.toLowerCase();
+  const mus = MUSCLES.find((M) => M.match.some((x) => n.includes(x)));
+  const isSpine = !mus && SPINE.some((S) => n.includes(S.match) && (!S.not || !n.includes(S.not))
+    && (S.match !== 'disk of' || n.includes('lumbar')));
+  if (!mus && !isSpine) continue;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
+  g.computeBoundingSphere();
+  const col = mus ? mus.color : (n.includes('disk') ? '#D9A05E' : '#E6E0D2');
+  const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(col),
+    roughness: 0.5, metalness: 0.02, clearcoat: 0.35,
+    emissive: new THREE.Color('#D64545'), emissiveIntensity: 0 });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.userData = { part: p, mus: mus?.key || null, side: n.startsWith('left') ? -1 : n.startsWith('right') ? 1 : 0,
+    baseColor: mat.color.clone() };
+  root.add(mesh); meshes.push(mesh);
+  if (mus) (byMuscle[mus.key] ??= []).push(mesh);
+  bbox.expandByObject(mesh);
+}
+const center = bbox.getCenter(new THREE.Vector3());
+root.position.sub(center);
+const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
+
+/* ---------- cámara ---------- */
+const orbit = { az: 2.6, el: 0.12, dist: radius * 1.7, target: new THREE.Vector3(0, 0.04, 0) };
+const cur = { ...orbit, target: orbit.target.clone() };
+function applyCamera() {
+  const ce = Math.cos(cur.el);
+  camera.position.set(
+    cur.target.x + cur.dist * ce * Math.sin(cur.az),
+    cur.target.y + cur.dist * Math.sin(cur.el),
+    cur.target.z + cur.dist * ce * Math.cos(cur.az));
+  camera.lookAt(cur.target);
+}
+function dampCamera(dt) {
+  const k = 1 - Math.exp(-dt * 9);
+  cur.az += (orbit.az - cur.az) * k; cur.el += (orbit.el - cur.el) * k;
+  cur.dist += (orbit.dist - cur.dist) * k; cur.target.lerp(orbit.target, k);
+  applyCamera();
+}
+const canvas = $('gl');
+let dragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerup', (e) => { dragging = false; canvas.releasePointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  orbit.az -= (e.clientX - lastX) * 0.006;
+  orbit.el = Math.max(-1.2, Math.min(1.2, orbit.el + (e.clientY - lastY) * 0.006));
+  lastX = e.clientX; lastY = e.clientY;
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orbit.dist = Math.max(radius * 0.5, Math.min(radius * 4, orbit.dist * Math.exp(e.deltaY * 0.0018)));
+}, { passive: false });
+
+/* ---------- modelo biomecánico (educativo, simplificado) ---------- */
+const state = { F: 0, L: 0, C: 0 };          // flexión 0..1 · lateral -1..1 · carga 0..1 (≈20 kg)
+let presurePreset = null;                     // los presets fijan el valor clásico exacto
+
+function activations() {
+  const { F, L, C } = state;
+  const base = {
+    erectores: Math.min(1, 0.08 + 0.72 * F + 0.55 * C * (1 + 0.6 * F)),
+    psoas:     Math.min(1, 0.08 + 0.35 * F + 0.18 * C),
+    gluteo:    Math.min(1, 0.06 + 0.40 * F + 0.50 * C),
+  };
+  return base;
+}
+function discPressure() {
+  if (presurePreset !== null) return presurePreset;
+  const { F, C } = state;
+  return Math.round(100 + 95 * F + 55 * C * (1 + 0.8 * F));
+}
+
+const PRESETS = [
+  { id: 'pie',      es: 'De pie',              F: 0,    L: 0, C: 0,   P: 100 },
+  { id: 'sentado',  es: 'Sentado recto',       F: 0.12, L: 0, C: 0,   P: 140 },
+  { id: 'encorvado',es: 'Sentado encorvado',   F: 0.45, L: 0, C: 0,   P: 185 },
+  { id: 'inclinado',es: 'Inclinado de pie',    F: 0.55, L: 0, C: 0,   P: 150 },
+  { id: 'mal',      es: 'Levantar mal (lomo)', F: 0.85, L: 0, C: 1,   P: 220 },
+  { id: 'bien',     es: 'Levantar bien (sentadilla)', F: 0.18, L: 0, C: 1, P: 140 },
+];
+$('presets').innerHTML = PRESETS.map((p) =>
+  `<button class="pbtn" data-p="${p.id}">${p.es}</button>`).join('');
+for (const b of document.querySelectorAll('[data-p]')) {
+  b.addEventListener('click', () => {
+    const p = PRESETS.find((x) => x.id === b.dataset.p);
+    state.F = p.F; state.L = p.L; state.C = p.C;
+    presurePreset = p.P;
+    $('sF').value = p.F * 100; $('sL').value = p.L * 100; $('sC').value = p.C * 100;
+    document.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('on', x === b));
+    $('readout').textContent = `${p.es} — presión discal ~${p.P}% de la de pie.` +
+      (p.id === 'mal' ? ' La espalda como grúa: los erectores al máximo y el disco exprimido.' :
+       p.id === 'bien' ? ' La carga la toman piernas y glúteos; la espalda se mantiene casi vertical.' : '');
+    update();
+  });
+}
+const manual = () => {
+  presurePreset = null;
+  document.querySelectorAll('[data-p]').forEach((x) => x.classList.remove('on'));
+  state.F = $('sF').value / 100; state.L = $('sL').value / 100; state.C = $('sC').value / 100;
+  update();
+};
+$('sF').addEventListener('input', manual);
+$('sL').addEventListener('input', manual);
+$('sC').addEventListener('input', manual);
+
+/* ---------- pintura + barras + figura ---------- */
+$('bars').innerHTML = MUSCLES.map((M) =>
+  `<div class="bar"><div class="t"><span>${M.es}</span><b id="bv-${M.key}">0%</b></div>
+   <div class="track"><div class="fill" id="bf-${M.key}"></div></div></div>`).join('');
+
+function drawFigure() {
+  const a = state.F * 80;                      // grados de flexión visual
+  const rad = (a * Math.PI) / 180;
+  const hx = 50, hy = 74;                      // cadera
+  const sx = hx + Math.sin(rad) * 34, sy = hy - Math.cos(rad) * 34;   // hombro
+  const bend = state.F > 0.5 && state.C > 0.5; // rodillas según técnica
+  const kneeBend = state.C > 0.5 && state.F < 0.4 ? 14 : 3;
+  $('figSvg').innerHTML =
+    `<line x1="${hx}" y1="${hy}" x2="${sx}" y2="${sy}" stroke="#111827" stroke-width="5" stroke-linecap="round"/>` +
+    `<circle cx="${sx + Math.sin(rad) * 8}" cy="${sy - Math.cos(rad) * 8}" r="7" fill="#111827"/>` +
+    `<line x1="${hx}" y1="${hy}" x2="${hx - kneeBend}" y2="${hy + 22}" stroke="#111827" stroke-width="4.5" stroke-linecap="round"/>` +
+    `<line x1="${hx - kneeBend}" y1="${hy + 22}" x2="${hx}" y2="${hy + 44}" stroke="#111827" stroke-width="4.5" stroke-linecap="round"/>` +
+    (state.C > 0.05 ? `<rect x="${sx + Math.sin(rad + 1.2) * 20 - 6}" y="${sy + Math.cos(rad) * 22 - 2}" width="13" height="10" rx="2" fill="#D64545"/>` +
+      `<line x1="${sx}" y1="${sy}" x2="${sx + Math.sin(rad + 1.2) * 20}" y2="${sy + Math.cos(rad) * 22 + 2}" stroke="#111827" stroke-width="3.5" stroke-linecap="round"/>` : '') +
+    `<line x1="20" y1="118" x2="80" y2="118" stroke="#D1D5DB" stroke-width="2"/>`;
+}
+
+function update() {
+  const act = activations();
+  for (const M of MUSCLES) {
+    const a = act[M.key];
+    for (const m of byMuscle[M.key] || []) {
+      // asimetría lateral: el lado contrario a la inclinación trabaja más
+      const lat = 1 + (state.L * -m.userData.side) * 0.5;
+      const ai = Math.min(1, a * (m.userData.side === 0 ? 1 : lat));
+      m.material.color.copy(m.userData.baseColor).lerp(new THREE.Color('#D64545'), ai * 0.75);
+      m.material.emissiveIntensity = ai * 0.28;
+      m.userData.act = ai;
+    }
+    $(`bv-${M.key}`).textContent = Math.round(a * 100) + '%';
+    $(`bf-${M.key}`).style.width = (a * 100) + '%';
+  }
+  const P = discPressure();
+  $('gP').textContent = P + '%';
+  $('gP').style.color = P > 180 ? 'var(--hot)' : P > 130 ? '#D97706' : 'var(--ink)';
+  $('vF').textContent = Math.round(state.F * 80) + '°';
+  $('vL').textContent = Math.round(state.L * 30) + '°';
+  $('vC').textContent = Math.round(state.C * 20) + ' kg';
+  drawFigure();
+}
+
+/* ---------- bucle ---------- */
+function fit() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+  applyCamera();
+}
+addEventListener('resize', fit);
+let lastT = performance.now();
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  dampCamera(Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  // pulso sutil en músculos muy activos
+  const tw = 0.5 + 0.5 * Math.sin(now * 0.004);
+  for (const m of meshes) if (m.userData.act > 0.55)
+    m.material.emissiveIntensity = m.userData.act * (0.2 + 0.18 * tw);
+  renderer.render(scene, camera);
+}
+fit();
+update();
+$('loading').remove();
+loop();
+</script>
