@@ -1,0 +1,313 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KaloLumen replica — CT volume &amp; X-ray sim</title>
+
+<style>
+  :root {
+    --bg: #101216; --panel: #16191F; --panel2: #1C2028; --line: #262B35;
+    --ink: #E6E9F1; --mut: #8A92A6; --faint: #5A6174; --acc: #E8B34A;
+    --mono: ui-monospace, Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+         font-size: 13px; overflow: hidden; }
+  .app { display: grid; height: 100dvh; gap: 1px; background: var(--line);
+         grid-template-columns: 1fr 330px; grid-template-rows: 48px 1fr; }
+  .app > * { background: var(--bg); min-width: 0; min-height: 0; }
+
+  .top { grid-column: 1 / 3; display: flex; align-items: center; gap: 16px; padding: 0 14px;
+         background: var(--panel); }
+  .top .ey { font: 10px var(--mono); letter-spacing: 0.2em; color: var(--faint); }
+  .top b { font-size: 13px; }
+  .modes { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--line);
+           border-radius: 9px; padding: 2px; }
+  .modes button { border: 0; background: none; color: var(--mut); font-size: 11.5px;
+                  padding: 5px 13px; border-radius: 7px; cursor: pointer; }
+  .modes button.on { background: var(--panel2); color: var(--ink); }
+  .ctl { display: flex; align-items: center; gap: 7px; font: 10px var(--mono);
+         letter-spacing: 0.06em; color: var(--faint); }
+  .ctl input[type=range] { width: 110px; accent-color: var(--acc); }
+  .ctl b { color: var(--ink); font-weight: 600; min-width: 62px; }
+  .ctl select { background: var(--panel2); color: var(--mut); border: 1px solid var(--line);
+                border-radius: 6px; font: 10px var(--mono); padding: 3px 4px; outline: none; }
+  .spacer { flex: 1; }
+  .src { font: 9.5px var(--mono); color: var(--faint); text-decoration: none; }
+
+  .three { position: relative; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .hud { position: absolute; top: 8px; left: 10px; font: 9.5px var(--mono); color: var(--faint);
+         letter-spacing: 0.1em; }
+  .hud2 { position: absolute; bottom: 8px; left: 10px; font: 9.5px var(--mono); color: var(--faint); }
+
+  .mpr { display: grid; grid-template-rows: 1.35fr 1fr 1fr; gap: 1px; background: var(--line); }
+  .mp { position: relative; background: #000; display: flex; align-items: center;
+        justify-content: center; overflow: hidden; }
+  .mp img { max-width: 100%; max-height: 100%; }
+  .mp .cap { position: absolute; top: 6px; left: 8px; right: 8px; display: flex; z-index: 2;
+             font: 10px var(--mono); }
+  .mp .cap b { letter-spacing: 0.1em; }
+  .mp .cap span:last-child { margin-left: auto; color: var(--faint); }
+  .mp .bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #161A22; }
+  .mp .bar i { display: block; height: 100%; background: var(--acc); }
+  .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             font: 12px var(--mono); color: var(--faint); background: var(--bg); z-index: 20; }
+</style>
+
+<div class="app">
+  <header class="top">
+    <span class="ey">KALOLUMEN · REPLICA</span><b>Chest CTA — volume &amp; lumen</b>
+    <div class="modes" id="modes">
+      <button data-m="0" class="on">3DCG</button>
+      <button data-m="1">X-ray sim</button>
+    </div>
+    <div class="ctl">UPPER <input type="range" id="upper" min="-400" max="2000" value="750"><b id="upperV">750 HU</b></div>
+    <div class="ctl">LOWER <input type="range" id="lower" min="-900" max="800" value="-150"><b id="lowerV">-150 HU</b></div>
+    <div class="ctl">CUT
+      <select id="cutAxis"><option value="none">Off</option><option value="x">Sagittal</option>
+        <option value="y">Coronal</option><option value="z" selected>Axial</option></select>
+      <input type="range" id="cutPos" min="0" max="1" step="0.002" value="0.55">
+    </div>
+    <div class="spacer"></div>
+    <a class="src" href="https://x.com/t_itamiya/status/2098969899326673216" target="_blank" rel="noreferrer">fuente ↗</a>
+  </header>
+
+  <main class="three">
+    <canvas id="gl"></canvas>
+    <div class="hud">DRAG TO ROTATE · WHEEL TO ZOOM</div>
+    <div class="hud2">CTA-cardio (3D Slicer sample data) · 256×256×161 · GPU raycast</div>
+  </main>
+
+  <aside class="mpr">
+    <div class="mp" data-s="axial">
+      <div class="cap"><b>AXIAL</b><span id="axN"></span></div>
+      <img id="axImg"><div class="bar"><i id="axBar"></i></div>
+    </div>
+    <div class="mp" data-s="coronal">
+      <div class="cap"><b>CORONAL</b><span id="coN"></span></div>
+      <img id="coImg"><div class="bar"><i id="coBar" style="background:#4ADE9B"></i></div>
+    </div>
+    <div class="mp" data-s="sagital">
+      <div class="cap"><b>SAGITTAL</b><span id="saN"></span></div>
+      <img id="saImg"><div class="bar"><i id="saBar" style="background:#E36B8B"></i></div>
+    </div>
+  </aside>
+</div>
+<div class="loading" id="loading">loading the volume…</div>
+
+<script type="module">
+import * as THREE from '../../vendor/three.module.min.js';
+const $ = (id) => document.getElementById(id);
+
+const meta = await fetch('data/volume.json').then((r) => r.ok ? r.json() : null);
+if (!meta) {
+  $('loading').textContent = 'Falta data/ (CTA-cardio no se redistribuye) — ver bootstrap.sh para regenerarla.';
+  throw new Error('sin volumen');
+}
+const buf = new Uint8Array(await fetch('data/volume.bin').then((r) => r.arrayBuffer()));
+const [NX, NY, NZ] = meta.dims;
+const size = [NX * meta.spacing[0], NY * meta.spacing[1], NZ * meta.spacing[2]];
+const maxDim = Math.max(...size);
+const box = size.map((s) => s / maxDim);   // caja normalizada
+
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
+renderer.setClearColor(0x101216, 1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
+
+const tex = new THREE.Data3DTexture(buf, NX, NY, NZ);
+tex.format = THREE.RedFormat;
+tex.minFilter = tex.magFilter = THREE.LinearFilter;
+tex.unpackAlignment = 1;
+tex.needsUpdate = true;
+
+const uniforms = {
+  uMap: { value: tex },
+  uCam: { value: new THREE.Vector3() },
+  uBox: { value: new THREE.Vector3(...box) },
+  uLower: { value: -150 }, uUpper: { value: 750 },
+  uHuMin: { value: meta.huMin }, uHuMax: { value: meta.huMax },
+  uMode: { value: 0 },
+  uCutN: { value: new THREE.Vector3(0, 0, 1) },
+  uCutD: { value: 0.55 }, uCutOn: { value: 1 },
+};
+const mat = new THREE.ShaderMaterial({
+  uniforms, side: THREE.BackSide, transparent: true,
+  vertexShader: `
+    varying vec3 vPos;
+    void main() {
+      vPos = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    precision highp float;
+    precision highp sampler3D;
+    varying vec3 vPos;
+    uniform sampler3D uMap;
+    uniform vec3 uCam, uBox, uCutN;
+    uniform float uLower, uUpper, uHuMin, uHuMax, uCutD;
+    uniform int uMode, uCutOn;
+
+    float hu(vec3 p) {   // p en [0,1]^3
+      float v = texture(uMap, p).r;
+      return uHuMin + v * (uHuMax - uHuMin);
+    }
+    vec2 boxHit(vec3 ro, vec3 rd, vec3 half_) {
+      vec3 inv = 1.0 / rd;
+      vec3 t0 = (-half_ - ro) * inv, t1 = (half_ - ro) * inv;
+      vec3 tmin = min(t0, t1), tmax = max(t0, t1);
+      return vec2(max(max(tmin.x, tmin.y), tmin.z), min(min(tmax.x, tmax.y), tmax.z));
+    }
+    vec3 ramp(float t) {   // transfer: tejido pardo -> musculo rojizo -> hueso/contraste claro
+      vec3 a = vec3(0.42, 0.22, 0.15);
+      vec3 b = vec3(0.72, 0.40, 0.28);
+      vec3 c = vec3(0.95, 0.92, 0.86);
+      return t < 0.6 ? mix(a, b, t / 0.6) : mix(b, c, (t - 0.6) / 0.4);
+    }
+    void main() {
+      vec3 half_ = uBox * 0.5;
+      vec3 ro = uCam;
+      vec3 rd = normalize(vPos - uCam);
+      vec2 t = boxHit(ro, rd, half_);
+      t.x = max(t.x, 0.0);
+      if (t.x >= t.y) discard;
+      int STEPS = 300;
+      float dt = (t.y - t.x) / float(STEPS);
+      vec3 col = vec3(0.0); float alpha = 0.0, xsum = 0.0;
+      for (int i = 0; i < 300; i++) {
+        float ti = t.x + (float(i) + 0.5) * dt;
+        vec3 p = ro + rd * ti;
+        if (uCutOn == 1 && dot(p, uCutN) > uCutD) continue;   // plano de corte -> ver la luz interna
+        vec3 uvw = p / uBox + 0.5;
+        float h = hu(uvw);
+        if (uMode == 1) {           // simulacion de rayos X (DRR)
+          float mu = clamp((h + 1000.0) / 2000.0, 0.0, 2.0);
+          xsum += mu * dt;
+        } else {
+          float s = smoothstep(uLower, uUpper, h);
+          if (s > 0.002) {
+            float a = s * s * dt * 38.0;
+            // sombreado por gradiente barato
+            float g = hu(uvw + vec3(0.006, 0.0, 0.0)) - h;
+            float shade = clamp(1.0 - g * 0.002, 0.55, 1.15);
+            vec3 c = ramp(s) * shade;
+            col += (1.0 - alpha) * a * c;
+            alpha += (1.0 - alpha) * a;
+            if (alpha > 0.98) break;
+          }
+        }
+      }
+      if (uMode == 1) {
+        float I = 1.0 - exp(-xsum * 2.6);
+        gl_FragColor = vec4(vec3(I), 1.0);
+      } else {
+        if (alpha < 0.004) discard;
+        gl_FragColor = vec4(col, alpha);
+      }
+    }`,
+});
+const mesh = new THREE.Mesh(new THREE.BoxGeometry(...box), mat);
+scene.add(mesh);
+const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),
+  new THREE.LineBasicMaterial({ color: 0x2A3148 }));
+scene.add(edges);
+
+/* ---------- controles ---------- */
+$('upper').addEventListener('input', () => {
+  uniforms.uUpper.value = Number($('upper').value);
+  $('upperV').textContent = $('upper').value + ' HU';
+});
+$('lower').addEventListener('input', () => {
+  uniforms.uLower.value = Number($('lower').value);
+  $('lowerV').textContent = $('lower').value + ' HU';
+});
+document.querySelectorAll('#modes button').forEach((b) =>
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#modes button').forEach((x) => x.classList.toggle('on', x === b));
+    uniforms.uMode.value = Number(b.dataset.m);
+  }));
+function applyCut() {
+  const ax = $('cutAxis').value;
+  uniforms.uCutOn.value = ax === 'none' ? 0 : 1;
+  if (ax === 'none') return;
+  const n = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[ax];  // espacio objeto = RAS
+  uniforms.uCutN.value.set(...n);
+  const ext = Math.abs(box[0] * n[0]) + Math.abs(box[1] * n[1]) + Math.abs(box[2] * n[2]);
+  uniforms.uCutD.value = (Number($('cutPos').value) - 0.5) * ext;
+}
+$('cutAxis').addEventListener('change', applyCut);
+$('cutPos').addEventListener('input', applyCut);
+
+/* ---------- MPR ---------- */
+const series = {};
+for (const k of ['axial', 'coronal', 'sagital'])
+  series[k] = (await fetch(`data/${k}/index.json`).then((r) => r.json())).files.map((f) => `data/${k}/${f}`);
+const st = {
+  axial: { i: Math.floor(series.axial.length / 2), img: 'axImg', n: 'axN', bar: 'axBar' },
+  coronal: { i: Math.floor(series.coronal.length / 2), img: 'coImg', n: 'coN', bar: 'coBar' },
+  sagital: { i: Math.floor(series.sagital.length / 2), img: 'saImg', n: 'saN', bar: 'saBar' },
+};
+function setSlice(k, i) {
+  const s = st[k];
+  s.i = Math.max(0, Math.min(series[k].length - 1, i));
+  $(s.img).src = series[k][s.i];
+  $(s.n).textContent = `${s.i + 1} / ${series[k].length}`;
+  $(s.bar).style.width = (100 * (s.i + 1) / series[k].length) + '%';
+}
+for (const k of Object.keys(st)) setSlice(k, st[k].i);
+for (const mp of document.querySelectorAll('.mp'))
+  mp.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    setSlice(mp.dataset.s, st[mp.dataset.s].i + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: false });
+
+/* ---------- camara (orbita el volumen; el rayo se lanza en espacio objeto) ---------- */
+/* el volumen NRRD esta en RAS: +x der, +y ant, +z sup -> three: y arriba = z_ras */
+mesh.rotation.x = -Math.PI / 2;
+edges.rotation.x = -Math.PI / 2;
+const orbit = { az: 0.6, el: 0.18, dist: 2.4 };
+const cur = { ...orbit };
+const cv = renderer.domElement;
+let dragging = false, lastX = 0, lastY = 0;
+cv.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY;
+  try { cv.setPointerCapture(e.pointerId); } catch {} });
+cv.addEventListener('pointerup', (e) => { dragging = false; try { cv.releasePointerCapture(e.pointerId); } catch {} });
+cv.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  orbit.az -= (e.clientX - lastX) * 0.006;
+  orbit.el = Math.max(-1.4, Math.min(1.4, orbit.el + (e.clientY - lastY) * 0.006));
+  lastX = e.clientX; lastY = e.clientY;
+});
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orbit.dist = Math.max(1.1, Math.min(6, orbit.dist * Math.exp(e.deltaY * 0.0016)));
+}, { passive: false });
+
+function fit() {
+  const r = cv.parentElement.getBoundingClientRect();
+  renderer.setPixelRatio(Math.min(1.5, devicePixelRatio || 1));
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', fit);
+let lastT = performance.now();
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const k = 1 - Math.exp(-dt * 9);
+  cur.az += (orbit.az - cur.az) * k; cur.el += (orbit.el - cur.el) * k;
+  cur.dist += (orbit.dist - cur.dist) * k;
+  const ce = Math.cos(cur.el);
+  camera.position.set(cur.dist * ce * Math.sin(cur.az), cur.dist * Math.sin(cur.el), cur.dist * ce * Math.cos(cur.az));
+  camera.lookAt(0, 0, 0);
+  /* camara en espacio objeto del mesh (para el raycast) */
+  uniforms.uCam.value.copy(mesh.worldToLocal(camera.position.clone()));
+  renderer.render(scene, camera);
+}
+applyCut();
+fit();
+$('loading').remove();
+loop();
+</script>

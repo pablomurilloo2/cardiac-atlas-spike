@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3D ANATOMY — 腹部 MPR</title>
+<title>3D ANATOMY — Abdomen MPR</title>
 
 <style>
   :root {
@@ -80,51 +80,51 @@
 
 <div class="app">
   <header class="top">
-    <span class="ey">3D ANATOMY</span><b>腹部 — 断面と立体</b>
+    <span class="ey">3D ANATOMY</span><b>Abdomen — slices &amp; solids</b>
     <nav class="tabs" id="tabs">
-      <button data-t="overview" class="on">概観</button>
-      <button data-t="axial">軸位</button>
-      <button data-t="coronal">冠状位</button>
-      <button data-t="sagital">矢状位</button>
+      <button data-t="overview" class="on">Overview</button>
+      <button data-t="axial">Axial</button>
+      <button data-t="coronal">Coronal</button>
+      <button data-t="sagital">Sagittal</button>
     </nav>
     <a class="src" href="https://x.com/ZentrixHQ/status/2097579544366534955" target="_blank" rel="noreferrer">fuente ↗</a>
   </header>
 
   <aside class="side">
-    <span class="gl">ガイドレッスン</span>
+    <span class="gl">GUIDED LESSONS</span>
     <div id="lessons"></div>
-    <span class="gl">構造</span>
+    <span class="gl">STRUCTURES</span>
     <div id="structs"></div>
-    <div class="note">TC: Medical Decathlon Task03 liver_100 (CC BY-SA 4.0, vía 3D Slicer
-      SampleData) — dato público, no es un paciente identificable. Órganos segmentados
-      localmente con TotalSegmentator. Réplica local del visor del video.</div>
+    <div class="note">CT: Medical Decathlon Task03 liver_100 (CC BY-SA 4.0, via 3D Slicer
+      SampleData) — public data, not an identifiable patient. Organs segmented locally
+      with TotalSegmentator. Local replica of the viewer in the video.</div>
   </aside>
 
   <main class="three">
     <canvas id="gl"></canvas>
-    <div class="hud">ドラッグで回転 · ホイールでズーム</div>
+    <div class="hud">DRAG TO ROTATE · WHEEL TO ZOOM</div>
     <div class="zoom">
       <button id="zin">+</button><span class="pct" id="zpct">100%</span><button id="zout">−</button>
     </div>
   </main>
 
   <div class="mp ax on" data-s="axial">
-    <div class="cap"><b>軸位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">AXIAL</span></b><span id="axN"></span></div>
+    <div class="cap"><b style="font-family:var(--mono);letter-spacing:.1em">AXIAL</b><span id="axN"></span></div>
     <img id="axImg" alt="axial"><div class="bar"><i id="axBar" style="background:#E8B34A"></i></div>
   </div>
 
   <div class="bottom">
     <div class="mp" data-s="coronal">
-      <div class="cap"><b>冠状位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">CORONAL</span></b><span id="coN"></span></div>
+      <div class="cap"><b style="font-family:var(--mono);letter-spacing:.1em">CORONAL</b><span id="coN"></span></div>
       <img id="coImg" alt="coronal"><div class="bar"><i id="coBar" style="background:#4ADE9B"></i></div>
     </div>
     <div class="mp" data-s="sagital">
-      <div class="cap"><b>矢状位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">SAGITTAL</span></b><span id="saN"></span></div>
+      <div class="cap"><b style="font-family:var(--mono);letter-spacing:.1em">SAGITTAL</b><span id="saN"></span></div>
       <img id="saImg" alt="sagital"><div class="bar"><i id="saBar" style="background:#E36B8B"></i></div>
     </div>
   </div>
 </div>
-<div class="loading" id="loading">腹部を構築中…</div>
+<div class="loading" id="loading">building the abdomen…</div>
 
 <script type="module">
 import * as THREE from '../../vendor/three.module.min.js';
@@ -258,38 +258,38 @@ document.querySelectorAll('#tabs button').forEach((b) =>
 const groups = (orgMan ? orgMan.parts : []).map((p, i) => (
   { id: 'g' + i, label: p.name, color: p.color, meshes: [orgMeshes[i]], on: true }));
 if (!orgMan) $('structs').innerHTML =
-  '<div style="padding:6px 10px;font-size:10.5px;color:var(--faint)">Los órganos 3D aún se están segmentando — por ahora, los tres planos de TC.</div>';
+  '<div style="padding:6px 10px;font-size:10.5px;color:var(--faint)">3D organs are still being segmented — for now, the three CT planes.</div>';
 $('structs').innerHTML = groups.map((s) =>
   `<div class="st" data-id="${s.id}"><span class="sw" style="background:${s.color}"></span>
-   ${s.label}<span class="eye">表示</span></div>`).join('');
+   ${s.label}<span class="eye">shown</span></div>`).join('');
 document.querySelectorAll('.st').forEach((el) =>
   el.addEventListener('click', () => {
     const s = groups.find((g) => g.id === el.dataset.id);
     s.on = !s.on;
     el.classList.toggle('off', !s.on);
-    el.querySelector('.eye').textContent = s.on ? '表示' : '非表示';
+    el.querySelector('.eye').textContent = s.on ? 'shown' : 'hidden';
     for (const m of s.meshes) m.visible = s.on;
   }));
 
 /* ---------- lecciones ---------- */
 const LESSONS = [
-  { t: '体を切る方向を理解する', run() { setView('overview'); } },
-  { t: '断面から立体を想像する', run() { setView('axial'); } },
-  { t: '同じ臓器を三つの断面で追う', run() {
+  { t: 'Understand the three cutting planes', run() { setView('overview'); } },
+  { t: 'Match a slice to the solid anatomy', run() { setView('axial'); } },
+  { t: 'Follow one organ across all planes', run() {
       setView('overview');
       setSlice('axial', Math.floor(series.axial.length * 0.55));
       setSlice('coronal', Math.floor(series.coronal.length * 0.5));
       setSlice('sagital', Math.floor(series.sagital.length * 0.5)); } },
-  { t: '大動脈と臓器の関係を見る', run() {
+  { t: 'See the aorta against the organs', run() {
       setView('overview');
       for (const g of groups) { g.on = true; for (const m of g.meshes) m.visible = true; }
       for (const m of orgMeshes) m.material.opacity = 0.35;
-      const ao = groups.find((g) => g.label.includes('大動脈'));
+      const ao = groups.find((g) => g.label.includes('Aorta'));
       if (ao) ao.meshes[0].material.opacity = 1;
       orbit.dist = radius * 2.0; } },
 ];
 $('lessons').innerHTML = LESSONS.map((l, i) =>
-  `<div class="lesson" data-i="${i}"><span class="n">${'０１２３４'[i + 1] || i + 1}</span>${l.t}</div>`).join('');
+  `<div class="lesson" data-i="${i}"><span class="n">${i + 1}</span>${l.t}</div>`).join('');
 document.querySelectorAll('.lesson').forEach((el) =>
   el.addEventListener('click', () => {
     document.querySelectorAll('.lesson').forEach((x) => x.classList.toggle('on', x === el));

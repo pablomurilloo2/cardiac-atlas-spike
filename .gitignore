@@ -18,3 +18,5 @@ node_modules/
 nohup.out
 # modelos del human-atlas verbatim (107 MB, regenerables: ver bootstrap.sh)
 proyectos/human-atlas/models/
+# CTA-cardio (muestra de Slicer, licencia de redistribucion no explicita): regenerable
+proyectos/10-kalolumen/data/

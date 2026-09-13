@@ -11,5 +11,9 @@ node extract-all.mjs    ../human-atlas .    # anatomía completa (2.234 mallas)
 #   (cd ../human-atlas && git worktree add ../human-atlas-main main)
 #   (cd ../human-atlas-main && ln -s ../human-atlas/node_modules node_modules && npx vite build --base=./)
 #   cp -r ../human-atlas-main/dist/models proyectos/human-atlas/models
+
+# Proyecto 10 (KaloLumen): CTA-cardio de Slicer SampleData (no redistribuible) ->
+#   curl -L -o CTA-cardio.nrrd https://github.com/Slicer/SlicerTestingData/releases/download/SHA256/3b0d4eb1a7d8ebb0c5a89cc0504640f76a030b4e869e33ff34c564c3d3b88ad2
+#   y regenerar proyectos/10-kalolumen/data con el bloque python del historial (volume.bin + series MPR)
 echo "OK. Datos personales (condicion.json, media/) NO son parte del repo: son locales."
 echo "Servir con: python3 serve.py  ->  http://localhost:8899"
