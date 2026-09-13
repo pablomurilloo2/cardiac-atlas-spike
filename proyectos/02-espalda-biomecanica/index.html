@@ -90,6 +90,13 @@
     <div class="gauge"><span class="v" id="gP">100%</span>
       <div class="l">respecto a estar de pie (Nachemson, 1976)</div></div>
 
+    <span class="gl">Longitud muscular (color 3D)</span>
+    <div style="margin:2px 0 10px">
+      <div style="height:8px;border-radius:4px;background:linear-gradient(90deg,#D64545,#C9BFae 50%,#3B6FD4)"></div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--mut);margin-top:3px">
+        <span>más corto</span><span>neutro</span><span>más largo</span></div>
+    </div>
+
     <span class="gl">Activación muscular</span>
     <div id="bars"></div>
 
@@ -168,7 +175,8 @@ root.position.sub(center);
 const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
 
 /* ---------- cámara ---------- */
-const orbit = { az: 2.6, el: 0.12, dist: radius * 1.7, target: new THREE.Vector3(0, 0.04, 0) };
+/* vista posterior por defecto, como el video */
+const orbit = { az: Math.PI, el: 0.12, dist: radius * 2.7, target: new THREE.Vector3(0, 0.04, 0) };
 const cur = { ...orbit, target: orbit.target.clone() };
 function applyCamera() {
   const ce = Math.cos(cur.el);
@@ -273,6 +281,15 @@ function drawFigure() {
     `<line x1="20" y1="118" x2="80" y2="118" stroke="#D1D5DB" stroke-width="2"/>`;
 }
 
+/* cambio de longitud por postura: >0 el músculo se alarga, <0 se acorta */
+const RED = new THREE.Color('#D64545'), BLUE = new THREE.Color('#3B6FD4');
+function lengthChange(key, side) {
+  const { F, L } = state;
+  let len = key === 'erectores' ? 0.85 * F : key === 'psoas' ? -0.55 * F : 0.6 * F;
+  if (side !== 0) len += -L * side * 0.45;   // el lado hacia el que te inclinas se acorta
+  return Math.max(-1, Math.min(1, len));
+}
+
 function update() {
   const act = activations();
   for (const M of MUSCLES) {
@@ -281,8 +298,12 @@ function update() {
       // asimetría lateral: el lado contrario a la inclinación trabaja más
       const lat = 1 + (state.L * -m.userData.side) * 0.5;
       const ai = Math.min(1, a * (m.userData.side === 0 ? 1 : lat));
-      m.material.color.copy(m.userData.baseColor).lerp(new THREE.Color('#D64545'), ai * 0.75);
-      m.material.emissiveIntensity = ai * 0.28;
+      // color = longitud (rojo corto / azul largo), como el video; brillo = activación
+      const len = lengthChange(M.key, m.userData.side);
+      m.material.color.set('#C4BCAD')
+        .lerp(len < 0 ? RED : BLUE, Math.abs(len) * 0.85);
+      m.material.emissive.copy(m.material.color);
+      m.material.emissiveIntensity = ai * 0.22;
       m.userData.act = ai;
     }
     $(`bv-${M.key}`).textContent = Math.round(a * 100) + '%';
