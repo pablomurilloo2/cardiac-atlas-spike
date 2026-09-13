@@ -134,7 +134,7 @@ const $ = (id) => document.getElementById(id);
 async function jget(u) { const r = await fetch(u); return r.ok ? r.json() : null; }
 const [geom, orgMan] = await Promise.all([
   jget('data/geom.json'), jget('data/organs.json')]);
-const orgBin = await fetch('data/organs.bin').then((r) => r.arrayBuffer());
+const orgBin = orgMan ? await fetch('data/organs.bin').then((r) => r.arrayBuffer()) : null;
 const series = {};
 for (const k of ['axial', 'coronal', 'sagital'])
   series[k] = (await jget(`data/${k}/index.json`)).files.map((f) => `data/${k}/${f}`);
@@ -163,7 +163,7 @@ function addParts(man, bin, opts) {
   }
   return out;
 }
-const orgMeshes = addParts(orgMan, orgBin, {
+const orgMeshes = !orgMan ? [] : addParts(orgMan, orgBin, {
   roughness: 0.5, metalness: 0.03, clearcoat: 0.35,
   transparent: true, opacity: 0.96 });
 
@@ -255,8 +255,10 @@ document.querySelectorAll('#tabs button').forEach((b) =>
   b.addEventListener('click', () => setView(b.dataset.t)));
 
 /* ---------- estructuras ---------- */
-const groups = orgMan.parts.map((p, i) => (
+const groups = (orgMan ? orgMan.parts : []).map((p, i) => (
   { id: 'g' + i, label: p.name, color: p.color, meshes: [orgMeshes[i]], on: true }));
+if (!orgMan) $('structs').innerHTML =
+  '<div style="padding:6px 10px;font-size:10.5px;color:var(--faint)">Los órganos 3D aún se están segmentando — por ahora, los tres planos de TC.</div>';
 $('structs').innerHTML = groups.map((s) =>
   `<div class="st" data-id="${s.id}"><span class="sw" style="background:${s.color}"></span>
    ${s.label}<span class="eye">表示</span></div>`).join('');

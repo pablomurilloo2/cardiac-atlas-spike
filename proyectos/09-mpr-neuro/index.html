@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3D ANATOMY — 脳 MPR</title>
+<title>3D ANATOMY — Brain MPR</title>
 
 <style>
   :root {
@@ -80,51 +80,51 @@
 
 <div class="app">
   <header class="top">
-    <span class="ey">3D ANATOMY</span><b>脳 — 断面と立体</b>
+    <span class="ey">3D ANATOMY</span><b>Brain — slices &amp; solids</b>
     <nav class="tabs" id="tabs">
-      <button data-t="overview" class="on">概観</button>
-      <button data-t="axial">軸位</button>
-      <button data-t="coronal">冠状位</button>
-      <button data-t="sagital">矢状位</button>
+      <button data-t="overview" class="on">Overview</button>
+      <button data-t="axial">Axial</button>
+      <button data-t="coronal">Coronal</button>
+      <button data-t="sagital">Sagittal</button>
     </nav>
     <a class="src" href="https://x.com/CeoImed/status/2098941098328830223" target="_blank" rel="noreferrer">fuente ↗</a>
   </header>
 
   <aside class="side">
-    <span class="gl">ガイドレッスン</span>
+    <span class="gl">GUIDED LESSONS</span>
     <div id="lessons"></div>
-    <span class="gl">構造</span>
+    <span class="gl">STRUCTURES</span>
     <div id="structs"></div>
-    <div class="note">MRI: plantilla MNI152NLin2009cAsym (TemplateFlow, uso libre con atribución) —
-      no es una persona. Arterias: BodyParts3D © DBCLS CC BY 4.0, ajustadas al espacio MNI.
-      Réplica local del visor del video.</div>
+    <div class="note">MRI: MNI152NLin2009cAsym template (TemplateFlow) — a population average,
+      not a person. Brain structures &amp; arteries: BodyParts3D © DBCLS CC BY 4.0, fitted to
+      MNI space. Local replica of the viewer in the video.</div>
   </aside>
 
   <main class="three">
     <canvas id="gl"></canvas>
-    <div class="hud">ドラッグで回転 · ホイールでズーム</div>
+    <div class="hud">DRAG TO ROTATE · WHEEL TO ZOOM</div>
     <div class="zoom">
       <button id="zin">+</button><span class="pct" id="zpct">100%</span><button id="zout">−</button>
     </div>
   </main>
 
   <div class="mp ax on" data-s="axial">
-    <div class="cap"><b>軸位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">AXIAL</span></b><span id="axN"></span></div>
+    <div class="cap"><b style="font-family:var(--mono);letter-spacing:.1em">AXIAL</b><span id="axN"></span></div>
     <img id="axImg" alt="axial"><div class="bar"><i id="axBar" style="background:#E8B34A"></i></div>
   </div>
 
   <div class="bottom">
     <div class="mp" data-s="coronal">
-      <div class="cap"><b>冠状位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">CORONAL</span></b><span id="coN"></span></div>
+      <div class="cap"><b style="font-family:var(--mono);letter-spacing:.1em">CORONAL</b><span id="coN"></span></div>
       <img id="coImg" alt="coronal"><div class="bar"><i id="coBar" style="background:#4ADE9B"></i></div>
     </div>
     <div class="mp" data-s="sagital">
-      <div class="cap"><b>矢状位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">SAGITTAL</span></b><span id="saN"></span></div>
+      <div class="cap"><b style="font-family:var(--mono);letter-spacing:.1em">SAGITTAL</b><span id="saN"></span></div>
       <img id="saImg" alt="sagital"><div class="bar"><i id="saBar" style="background:#E36B8B"></i></div>
     </div>
   </div>
 </div>
-<div class="loading" id="loading">脳を構築中…</div>
+<div class="loading" id="loading">building the brain…</div>
 
 <script type="module">
 import * as THREE from '../../vendor/three.module.min.js';
@@ -133,9 +133,9 @@ const $ = (id) => document.getElementById(id);
 /* ---------- datos (públicos, incluidos en el repo) ---------- */
 async function jget(u) { const r = await fetch(u); return r.ok ? r.json() : null; }
 const [geom, brainMan, artMan] = await Promise.all([
-  jget('data/geom.json'), jget('data/brain.json'), jget('data/arteries.json')]);
+  jget('data/geom.json'), jget('data/brain-parts.json'), jget('data/arteries.json')]);
 const [brainBin, artBin] = await Promise.all([
-  fetch('data/brain.bin').then((r) => r.arrayBuffer()),
+  fetch('data/brain-parts.bin').then((r) => r.arrayBuffer()),
   fetch('data/arteries.bin').then((r) => r.arrayBuffer())]);
 const series = {};
 for (const k of ['axial', 'coronal', 'sagital'])
@@ -166,9 +166,9 @@ function addParts(man, bin, opts) {
   return out;
 }
 const brainMeshes = addParts(brainMan, brainBin, {
-  transparent: true, opacity: 0.32, roughness: 0.45, metalness: 0.02,
-  clearcoat: 0.4, depthWrite: false, side: THREE.DoubleSide });
-for (const m of brainMeshes) m.renderOrder = 3;
+  transparent: true, opacity: 0.55, roughness: 0.5, metalness: 0.02,
+  clearcoat: 0.35, depthWrite: false });
+brainMeshes.forEach((m, i) => { m.renderOrder = 3; m.userData.group = brainMan.parts[i].group; });
 const artMeshes = addParts(artMan, artBin, {
   roughness: 0.35, metalness: 0.05, clearcoat: 0.5 });
 
@@ -261,42 +261,49 @@ document.querySelectorAll('#tabs button').forEach((b) =>
 
 /* ---------- estructuras ---------- */
 const groups = [
-  { id: 'brain', label: '脳', color: '#D9B8AC', meshes: brainMeshes, on: true },
-  { id: 'art', label: '動脈', color: '#C0392B', meshes: artMeshes, on: true },
+  { id: 'cerebrum', label: 'Cerebrum', color: '#D8A79E',
+    meshes: brainMeshes.filter((m) => m.userData.group === 'cerebrum'), on: true },
+  { id: 'cerebellum', label: 'Cerebellum', color: '#BE8578',
+    meshes: brainMeshes.filter((m) => m.userData.group === 'cerebellum'), on: true },
+  { id: 'brainstem', label: 'Brainstem', color: '#D9BC85',
+    meshes: brainMeshes.filter((m) => m.userData.group === 'brainstem'), on: true },
+  { id: 'deep', label: 'Deep structures', color: '#9FB4D8',
+    meshes: brainMeshes.filter((m) => m.userData.group === 'deep'), on: true },
+  { id: 'art', label: 'Arteries', color: '#C0392B', meshes: artMeshes, on: true },
 ];
 $('structs').innerHTML = groups.map((s) =>
   `<div class="st" data-id="${s.id}"><span class="sw" style="background:${s.color}"></span>
-   ${s.label}<span class="eye">表示</span></div>`).join('');
+   ${s.label}<span class="eye">shown</span></div>`).join('');
 document.querySelectorAll('.st').forEach((el) =>
   el.addEventListener('click', () => {
     const s = groups.find((g) => g.id === el.dataset.id);
     s.on = !s.on;
     el.classList.toggle('off', !s.on);
-    el.querySelector('.eye').textContent = s.on ? '表示' : '非表示';
+    el.querySelector('.eye').textContent = s.on ? 'shown' : 'hidden';
     for (const m of s.meshes) m.visible = s.on;
   }));
 
 /* ---------- lecciones ---------- */
 const LESSONS = [
-  { t: '体を切る方向を理解する', run() { setView('overview'); } },
-  { t: '断面から立体を想像する', run() { setView('axial'); } },
-  { t: '同じ構造を三つの断面で追う', run() {
+  { t: 'Understand the three cutting planes', run() { setView('overview'); } },
+  { t: 'Match a slice to the solid anatomy', run() { setView('axial'); } },
+  { t: 'Follow one structure across all planes', run() {
       setView('overview');
       setSlice('axial', Math.floor(series.axial.length * 0.45));
       setSlice('coronal', Math.floor(series.coronal.length * 0.5));
       setSlice('sagital', Math.floor(series.sagital.length * 0.5)); } },
-  { t: '動脈と脳の関係を見る', run() {
+  { t: 'See the arteries against the brain', run() {
       setView('overview');
       for (const g of groups) { g.on = true; for (const m of g.meshes) m.visible = true; }
-      for (const m of brainMeshes) m.material.opacity = 0.14;
+      for (const m of brainMeshes) m.material.opacity = 0.12;
       orbit.dist = radius * 2.2; } },
 ];
 $('lessons').innerHTML = LESSONS.map((l, i) =>
-  `<div class="lesson" data-i="${i}"><span class="n">${'０１２３４'[i + 1] || i + 1}</span>${l.t}</div>`).join('');
+  `<div class="lesson" data-i="${i}"><span class="n">${i + 1}</span>${l.t}</div>`).join('');
 document.querySelectorAll('.lesson').forEach((el) =>
   el.addEventListener('click', () => {
     document.querySelectorAll('.lesson').forEach((x) => x.classList.toggle('on', x === el));
-    for (const m of brainMeshes) m.material.opacity = 0.32;
+    for (const m of brainMeshes) m.material.opacity = 0.55;
     LESSONS[Number(el.dataset.i)].run();
   }));
 
