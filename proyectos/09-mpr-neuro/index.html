@@ -30,6 +30,10 @@
   .lvl.on { background: #1A2540; color: #fff; }
   .lvl .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
   .lvl.on .dot { background: var(--accent); }
+  .est { margin-top: 12px; }
+  .est .row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 11.5px;
+              color: var(--mut); }
+  .est .sw { width: 9px; height: 9px; border-radius: 3px; flex: none; }
   .note { font-size: 9.5px; line-height: 1.5; color: var(--faint); margin-top: 14px;
           border-top: 1px solid var(--line); padding-top: 10px; }
 
@@ -40,6 +44,12 @@
            color: var(--faint); letter-spacing: 0.12em; }
   .readout { position: absolute; left: 12px; bottom: 10px; font-family: var(--mono);
              font-size: 10.5px; color: var(--mut); }
+  .modes { position: absolute; top: 8px; right: 12px; display: flex; gap: 1px;
+           background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .modes button { border: 0; background: var(--panel); color: var(--mut); font: 10.5px var(--mono);
+                  letter-spacing: 0.06em; padding: 6px 10px; cursor: pointer; }
+  .modes button:hover { color: var(--ink); }
+  .modes button.on { background: #1A2540; color: #fff; }
 
   /* ---- paneles MPR ---- */
   .mpr { display: grid; grid-template-rows: 1fr 1fr 1fr; gap: 1px; background: var(--line); }
@@ -64,15 +74,25 @@
       fuente: x.com/CeoImed/…0223</div>
     <div class="eyebrow" style="margin-bottom:6px">Niveles</div>
     <div id="levels"></div>
-    <div class="note">Estudio personal local (no está en el repo). Las tres series salen de los
-      NIfTI de tu RM: sagital T2 (17), coronal T2 (16), axial T2 (44), re-renderizadas sin el
-      texto quemado del export. Mapeo nivel→corte aproximado. Rueda sobre cada panel para
-      recorrer su serie; el plano se mueve en el 3D.</div>
+    <div class="est" id="est">
+      <div class="eyebrow" style="margin:6px 0 2px 10px">Estructuras</div>
+    </div>
+    <div class="note">Estudio personal local (no está en el repo). La columna 3D es TU columna:
+      mallas segmentadas por IA de la RM sagital, dibujadas en el mismo sistema de coordenadas
+      milimétrico (RAS) de la adquisición — por eso coinciden con los cortes exactamente. Las tres
+      series se re-renderizan desde NIfTI sin texto quemado. Rueda sobre cada panel para recorrer
+      su serie; el plano se mueve en el 3D.</div>
   </aside>
 
   <main class="three">
     <canvas id="gl"></canvas>
     <div class="tag3d">3D · ARRASTRA PARA ROTAR</div>
+    <div class="modes" id="modes">
+      <button data-m="solido" class="on">SOLIDO</button>
+      <button data-m="transparente">TRANSP</button>
+      <button data-m="malla">MALLA</button>
+      <button data-m="oculta">OCULTA</button>
+    </div>
     <div class="readout" id="readout"></div>
   </main>
 
@@ -97,75 +117,99 @@
 import * as THREE from '../../vendor/three.module.min.js';
 
 const $ = (id) => document.getElementById(id);
-const LEVELS = [
-  ['L1', 'first lumbar vertebra'], ['L2', 'second lumbar vertebra'],
-  ['L3', 'third lumbar vertebra'], ['L4', 'fourth lumbar vertebra'],
-  ['L5', 'fifth lumbar vertebra'], ['L5-S1', 'disk of fifth lumbar'], ['Sacro', 'sacrum'],
-];
 
-/* ---------- series reales (locales) ---------- */
-async function serie(dir) {
-  try {
-    const j = await fetch(`../../${dir}/index.json`, { cache: 'no-store' }).then((r) => r.ok ? r.json() : null);
-    return j?.files?.map((f) => `../../${dir}/${f}`) || null;
-  } catch { return null; }
+/* ---------- datos locales ---------- */
+async function jget(u) {
+  const r = await fetch(`../../${u}`, { cache: 'no-store' });
+  return r.ok ? r.json() : null;
 }
-const S = {
-  axial: await serie('media/rm-mpr/axial'),
-  coronal: await serie('media/rm-mpr/coronal'),
-  sagital: await serie('media/rm-mpr/sagital'),
-};
-if (!S.axial || !S.coronal || !S.sagital) {
-  $('loading').textContent = 'Este proyecto usa el estudio personal local (media/rm-*), no incluido en el repo.';
+async function serie(dir) {
+  const j = await jget(`${dir}/index.json`);
+  return j?.files?.map((f) => `../../${dir}/${f}`) || null;
+}
+const [geom, spineMan, axF, coF, saF] = await Promise.all([
+  jget('media/rm-mpr/geom.json'), jget('media/rm-mpr/spine-ras.json'),
+  serie('media/rm-mpr/axial'), serie('media/rm-mpr/coronal'), serie('media/rm-mpr/sagital'),
+]);
+if (!geom || !spineMan || !axF || !coF || !saF) {
+  $('loading').textContent = 'Este proyecto usa el estudio personal local (media/rm-mpr), no incluido en el repo.';
   throw new Error('sin estudio local');
 }
+const spineBin = await fetch('../../media/rm-mpr/spine-ras.bin').then((r) => r.arrayBuffer());
 
-/* ---------- 3D: columna + tres planos ---------- */
-const manifest = await fetch('../../anatomy-full.json').then((r) => r.json());
-const bin = await fetch('../../anatomy-full.bin').then((r) => r.arrayBuffer());
+/* ---------- escena: todo vive en coordenadas RAS (mm) dentro de root ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
 renderer.setClearColor(0x0B0D12, 1);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(34, 1, 0.005, 10);
-const key = new THREE.DirectionalLight(0xdfe8ff, 1.5); key.position.set(3, 4, 3);
+const camera = new THREE.PerspectiveCamera(34, 1, 1, 5000);
+const key = new THREE.DirectionalLight(0xdfe8ff, 1.5); key.position.set(300, 400, 300);
 scene.add(key, new THREE.HemisphereLight(0x8fa3c4, 0x101318, 0.9), new THREE.AmbientLight(0xffffff, 0.25));
-const root = new THREE.Group(); scene.add(root);
+const root = new THREE.Group();
+root.rotation.x = -Math.PI / 2;   /* RAS: +z superior → +y mundo, +y anterior → -z mundo */
+scene.add(root);
 
-const meshes = [], byLevel = new Map();
-const bbox = new THREE.Box3();
-for (const p of manifest.parts) {
-  const n = p.name.toLowerCase();
-  const isSpine = /lumbar vertebra|disk of .* lumbar|sacrum|twelfth thoracic/.test(n) && !n.includes('spinalis');
-  if (!isSpine) continue;
+/* tu columna real (segmentada de la RM sagital, ya en mm RAS) */
+const meshes = [];
+for (const p of spineMan.parts) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
-  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
-  g.computeBoundingSphere();
-  const disco = n.includes('disk');
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(spineBin, p.pos, p.nv * 3), 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(spineBin, p.idx, p.ni), 1));
+  g.computeVertexNormals();
   const mat = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(disco ? '#C98A4B' : '#B9C1D4'),
-    roughness: 0.5, metalness: 0.05, clearcoat: 0.3,
+    color: new THREE.Color(p.color), roughness: 0.55, metalness: 0.05, clearcoat: 0.25,
     transparent: true, opacity: 0.92 });
   const mesh = new THREE.Mesh(g, mat);
-  mesh.userData = { part: p, baseColor: mat.color.clone() };
+  mesh.userData.name = p.name;
   root.add(mesh); meshes.push(mesh);
-  const L = LEVELS.find(([, m]) => n.includes(m) && (m.includes('disk') ? true : !n.includes('disk')));
-  if (L) (byLevel.get(L[0]) ?? byLevel.set(L[0], []).get(L[0])).push(mesh);
-  bbox.expandByObject(mesh);
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `<span class="sw" style="background:${p.color}"></span>${p.name}`;
+  $('est').appendChild(row);
 }
-const center = bbox.getCenter(new THREE.Vector3());
-root.position.sub(center);
-const size = bbox.getSize(new THREE.Vector3());
-const radius = size.length() / 2;
 
-/* caja de referencia como en el video */
+/* planos con la extension y posicion reales de cada serie (UV segun el render de los JPEG) */
+function quad(verts, uvs, colorHex) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts.flat()), 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs.flat()), 2));
+  g.setIndex([0, 2, 1, 1, 2, 3]);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    side: THREE.DoubleSide, transparent: true, opacity: 0.94, toneMapped: false }));
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(g),
+    new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 }));
+  m.add(edge);
+  root.add(m);
+  return m;
+}
+const gA = geom.axial, gC = geom.coronal, gS = geom.sagital;
+/* axial en z=0 local: arriba de la imagen = anterior (+y), izquierda = +x (radiologico) */
+const plAx = quad(
+  [[gA.hi[0], gA.hi[1], 0], [gA.lo[0], gA.hi[1], 0], [gA.hi[0], gA.lo[1], 0], [gA.lo[0], gA.lo[1], 0]],
+  [[0, 1], [1, 1], [0, 0], [1, 0]], 0xE8B34A);
+/* coronal en y=0: arriba = superior (+z), izquierda = +x */
+const plCo = quad(
+  [[gC.hi[0], 0, gC.hi[2]], [gC.lo[0], 0, gC.hi[2]], [gC.hi[0], 0, gC.lo[2]], [gC.lo[0], 0, gC.lo[2]]],
+  [[0, 1], [1, 1], [0, 0], [1, 0]], 0x4ADE9B);
+/* sagital en x=0: arriba = superior (+z), izquierda = posterior (y minimo) */
+const plSa = quad(
+  [[0, gS.lo[1], gS.hi[2]], [0, gS.hi[1], gS.hi[2]], [0, gS.lo[1], gS.lo[2]], [0, gS.hi[1], gS.lo[2]]],
+  [[0, 1], [1, 1], [0, 0], [1, 0]], 0xE36B8B);
+
+/* caja de referencia = union de los tres volumenes de adquisicion */
+const lo = [0, 1, 2].map((i) => Math.min(gA.lo[i], gC.lo[i], gS.lo[i]));
+const hi = [0, 1, 2].map((i) => Math.max(gA.hi[i], gC.hi[i], gS.hi[i]));
 const frame = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x * 1.7, size.y * 1.15, size.z * 2.2)),
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])),
   new THREE.LineBasicMaterial({ color: 0x2A3148 }));
-scene.add(frame);
+frame.position.set((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+root.add(frame);
 
-/* tres planos texturizados con el corte vigente */
+/* centrar root en el origen del mundo */
+const centerRas = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+root.position.copy(centerRas.clone().applyEuler(root.rotation).negate());
+const radius = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
+
+/* ---------- estado por serie ---------- */
 const texLoader = new THREE.TextureLoader();
 const cache = new Map();
 function tex(url) {
@@ -176,77 +220,73 @@ function tex(url) {
   }
   return cache.get(url);
 }
-function mkPlane(w, h, colorHex) {
-  const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0.92, toneMapped: false }));
-  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),
-    new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 }));
-  m.add(edge);
-  scene.add(m);
-  return m;
-}
-const W = size.x * 1.7, H = size.y * 1.15, D = size.z * 2.2;
-const plAx = mkPlane(W, D, 0xE8B34A); plAx.rotation.x = -Math.PI / 2;
-const plCo = mkPlane(W, H, 0x4ADE9B);
-const plSa = mkPlane(D, H, 0xE36B8B); plSa.rotation.y = Math.PI / 2;
-
-/* ---------- estado por serie ---------- */
 const st = {
-  axial:   { files: S.axial,   i: Math.floor(S.axial.length / 2),   img: 'axImg', n: 'axN', bar: 'axBar' },
-  coronal: { files: S.coronal, i: Math.floor(S.coronal.length / 2), img: 'coImg', n: 'coN', bar: 'coBar' },
-  sagital: { files: S.sagital, i: Math.floor(S.sagital.length / 2), img: 'saImg', n: 'saN', bar: 'saBar' },
+  axial:   { files: axF, g: gA, plane: plAx, axis: 2, i: Math.floor(axF.length / 2), img: 'axImg', n: 'axN', bar: 'axBar' },
+  coronal: { files: coF, g: gC, plane: plCo, axis: 1, i: Math.floor(coF.length / 2), img: 'coImg', n: 'coN', bar: 'coBar' },
+  sagital: { files: saF, g: gS, plane: plSa, axis: 0, i: Math.floor(saF.length / 2), img: 'saImg', n: 'saN', bar: 'saBar' },
 };
 function setSlice(k, i) {
   const s = st[k];
   s.i = Math.max(0, Math.min(s.files.length - 1, i));
   const url = s.files[s.i];
   $(s.img).src = url;
-  $(s.n).textContent = `${s.i + 1} / ${s.files.length}`;
+  $(s.n).textContent = `${s.i + 1} / ${s.files.length} · ${s.g.slices[s.i].toFixed(1)} mm`;
   $(s.bar).style.width = (100 * (s.i + 1) / s.files.length) + '%';
-  const t = s.files.length > 1 ? s.i / (s.files.length - 1) : 0.5;
-  if (k === 'axial') { plAx.material.map = tex(url); plAx.position.y = H / 2 - t * H; }
-  if (k === 'coronal') { plCo.material.map = tex(url); plCo.position.z = D / 2 - t * D; }
-  if (k === 'sagital') { plSa.material.map = tex(url); plSa.position.x = -W / 2 + t * W; }
-  st[k] && (plAx.material.needsUpdate = plCo.material.needsUpdate = plSa.material.needsUpdate = true);
+  s.plane.material.map = tex(url);
+  s.plane.material.needsUpdate = true;
+  const pos = [0, 0, 0]; pos[s.axis] = s.g.slices[s.i];
+  s.plane.position.set(...pos);
 }
-for (const [k] of Object.entries(st)) setSlice(k, st[k].i);
+for (const k of Object.keys(st)) setSlice(k, st[k].i);
 
 for (const mp of document.querySelectorAll('.mp')) {
   mp.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const k = mp.dataset.s === 'sagital' ? 'sagital' : mp.dataset.s;
+    const k = mp.dataset.s;
     setSlice(k, st[k].i + (e.deltaY > 0 ? 1 : -1));
   }, { passive: false });
 }
 
-/* ---------- niveles ---------- */
-const levelY = new Map();
-for (const [id] of LEVELS) {
-  const arr = byLevel.get(id) || [];
-  if (!arr.length) continue;
-  let y = 0; for (const m of arr) y += m.geometry.boundingSphere.center.y;
-  levelY.set(id, y / arr.length - center.y);
-}
-const yTop = Math.max(...levelY.values()), yBot = Math.min(...levelY.values());
-$('levels').innerHTML = LEVELS.map(([id]) =>
+/* ---------- niveles: reparto lineal sobre el rango vertical de tu columna ---------- */
+const LEVELS = ['T12', 'L1', 'L2', 'L3', 'L4', 'L5', 'Sacro'];
+const spineBox = new THREE.Box3();
+for (const m of meshes) { m.geometry.computeBoundingBox(); spineBox.union(m.geometry.boundingBox); }
+const zTop = spineBox.max.z, zBot = spineBox.min.z;
+$('levels').innerHTML = LEVELS.map((id) =>
   `<div class="lvl" data-l="${id}"><span class="dot"></span>${id}</div>`).join('');
+function nearestSlice(g, axis, value) {
+  let best = 0, bd = Infinity;
+  g.slices.forEach((v, i) => { const d = Math.abs(v - value); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
 function setLevel(id) {
   document.querySelectorAll('.lvl').forEach((e) => e.classList.toggle('on', e.dataset.l === id));
-  for (const m of meshes) m.material.color.copy(m.userData.baseColor);
-  for (const m of byLevel.get(id) || [])
-    m.material.color.copy(m.userData.baseColor).lerp(new THREE.Color(0x4D7FFF), 0.55);
-  const yy = levelY.get(id) ?? 0;
-  const t = (yTop - yy) / (yTop - yBot || 1);
-  setSlice('axial', Math.round(t * (st.axial.files.length - 1)));
-  orbit.target.set(0, yy, 0);
-  $('readout').textContent = `Nivel ${id} — el plano axial saltó a su corte`;
+  const t = (LEVELS.indexOf(id) + 0.5) / LEVELS.length;
+  const z = zTop - t * (zTop - zBot);
+  setSlice('axial', nearestSlice(gA, 2, z));
+  orbit.target.set(0, z - centerRas.z, 0);
+  $('readout').textContent = `Nivel ${id} (aprox.) — plano axial en ${gA.slices[st.axial.i].toFixed(1)} mm`;
 }
 document.querySelectorAll('.lvl').forEach((e) =>
   e.addEventListener('click', () => setLevel(e.dataset.l)));
 
-/* ---------- cámara ---------- */
-const orbit = { az: 0.7, el: 0.16, dist: radius * 2.6, target: new THREE.Vector3() };
+/* ---------- modos de la columna: solido / transparente / malla / oculta ---------- */
+function setMode(mode) {
+  document.querySelectorAll('#modes button').forEach((b) =>
+    b.classList.toggle('on', b.dataset.m === mode));
+  for (const m of meshes) {
+    m.visible = mode !== 'oculta';
+    m.material.wireframe = mode === 'malla';
+    m.material.opacity = mode === 'transparente' ? 0.3 : 0.92;
+    m.material.depthWrite = mode !== 'transparente';
+    m.material.needsUpdate = true;
+  }
+}
+document.querySelectorAll('#modes button').forEach((b) =>
+  b.addEventListener('click', () => setMode(b.dataset.m)));
+
+/* ---------- camara ---------- */
+const orbit = { az: 0.85, el: 0.12, dist: radius * 3.2, target: new THREE.Vector3() };
 const cur = { az: orbit.az, el: orbit.el, dist: orbit.dist, target: orbit.target.clone() };
 function applyCamera() {
   const ce = Math.cos(cur.el);
@@ -274,7 +314,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  orbit.dist = Math.max(radius * 0.6, Math.min(radius * 5, orbit.dist * Math.exp(e.deltaY * 0.0018)));
+  orbit.dist = Math.max(radius * 0.5, Math.min(radius * 6, orbit.dist * Math.exp(e.deltaY * 0.0018)));
 }, { passive: false });
 
 function fit() {
@@ -294,10 +334,7 @@ function loop() {
   renderer.render(scene, camera);
 }
 fit();
-setLevel('L5-S1');
-/* encuadre inicial: vista completa, no pegado al nivel */
-orbit.target.set(0, 0, 0); orbit.dist = radius * 3.6; orbit.az = 0.85; orbit.el = 0.12;
-cur.az = orbit.az; cur.el = orbit.el; cur.dist = orbit.dist; cur.target.copy(orbit.target);
+setLevel('L4');
 $('loading').remove();
 loop();
 </script>
