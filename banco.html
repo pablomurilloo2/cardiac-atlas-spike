@@ -1,0 +1,1006 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PulseNet — Banco de pruebas: atlas cardiaco 3D</title>
+
+<style>
+  :root {
+    --navy-deep: #0A0D36;
+    --navy: #0F095E;
+    --periwinkle: #BACFFF;
+    --periwinkle-hover: #A3BEFF;
+    --mist: #D3DAEE;
+    --ink: #E4EBFC;
+    --ink-dim: #8B95C4;
+    --ink-muted: #5A6494;
+    --surface: #08080a;
+    --surface-2: #12142e;
+    --line: #23264d;
+    --ok: #4ADE9B;
+    --warn: #E8B34A;
+    --bad: #E36B6B;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    min-height: 100dvh;
+  }
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- panel de control ---------- */
+  .rail {
+    background: var(--surface-2);
+    border-right: 1px solid var(--line);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    overflow-y: auto;
+    max-height: 100dvh;
+  }
+  @media (max-width: 900px) {
+    .rail { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+
+  .brand { line-height: 1.35; }
+  .brand h1 { font-size: 13px; margin: 0; letter-spacing: -0.01em; }
+  .brand p { margin: 3px 0 0; font-size: 11px; color: var(--ink-muted); }
+
+  .group { display: flex; flex-direction: column; gap: 7px; }
+  .group > label.gl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--ink-muted); font-family: var(--mono);
+  }
+
+  select, button {
+    font-family: var(--mono); font-size: 12px;
+    background: #191c3d; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; width: 100%;
+    transition: background 140ms ease, border-color 140ms ease;
+  }
+  select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--periwinkle); outline-offset: 1px;
+  }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { background: #232750; border-color: #363b76; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  button.primary {
+    background: var(--periwinkle); color: var(--navy-deep);
+    border-color: var(--periwinkle); font-weight: 600;
+  }
+  button.primary:hover:not(:disabled) {
+    background: var(--periwinkle-hover); border-color: var(--periwinkle-hover);
+  }
+
+  .toggles { display: flex; flex-direction: column; gap: 5px; }
+  .tg {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    cursor: pointer; user-select: none;
+  }
+  .tg input { accent-color: var(--periwinkle); width: 14px; height: 14px; margin: 0; }
+
+  /* ---------- zona de render ---------- */
+  .stage {
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .viewport {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 18px; min-height: 340px;
+    background:
+      radial-gradient(ellipse 70% 60% at 50% 40%, #14173a 0%, var(--surface) 78%);
+  }
+  #frame {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--navy-deep);
+    max-width: 100%;
+  }
+  #frame.light { background: #F4F6FC; }
+  canvas { display: block; touch-action: none; }
+
+  .hud {
+    position: absolute; top: 8px; left: 8px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.55;
+    color: var(--ink); background: rgba(8,8,10,0.72);
+    backdrop-filter: blur(6px);
+    padding: 7px 9px; border-radius: 5px; pointer-events: none;
+    border: 1px solid rgba(186,207,255,0.14);
+  }
+  #frame.light .hud { color: #0A0D36; background: rgba(255,255,255,0.82); border-color: rgba(15,9,94,0.14); }
+  .hud b { color: var(--periwinkle); font-weight: 600; }
+  #frame.light .hud b { color: var(--navy); }
+
+  .segname {
+    position: absolute; bottom: 8px; left: 8px; right: 8px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--ink); background: rgba(8,8,10,0.72);
+    backdrop-filter: blur(6px);
+    padding: 6px 9px; border-radius: 5px; pointer-events: none;
+    border: 1px solid rgba(186,207,255,0.14);
+    min-height: 26px; display: flex; align-items: center; gap: 8px;
+  }
+  #frame.light .segname { color: #0A0D36; background: rgba(255,255,255,0.82); border-color: rgba(15,9,94,0.14); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .count {
+    font-variant-numeric: tabular-nums; margin-left: auto;
+    color: var(--ink-dim); font-size: 10px;
+  }
+
+  /* ---------- resultados ---------- */
+  .results {
+    border-top: 1px solid var(--line);
+    background: var(--surface-2);
+    max-height: 42dvh; overflow-y: auto;
+  }
+  .results-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; background: var(--surface-2); z-index: 2;
+  }
+  .results-head h2 {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--ink-muted); font-family: var(--mono); margin: 0;
+  }
+  .results-head .spacer { flex: 1; }
+  .results-head button { width: auto; padding: 5px 10px; font-size: 11px; }
+
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  th {
+    text-align: left; padding: 7px 10px; color: var(--ink-muted);
+    font-weight: 400; border-bottom: 1px solid var(--line);
+    position: sticky; top: 37px; background: var(--surface-2);
+    white-space: nowrap; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  td {
+    padding: 6px 10px; border-bottom: 1px solid #1a1d3d;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  tbody tr:hover { background: #171a3a; }
+  .verdict { font-weight: 600; }
+  .v-ok { color: var(--ok); } .v-warn { color: var(--warn); } .v-bad { color: var(--bad); }
+  .empty { padding: 22px 14px; color: var(--ink-muted); font-family: var(--mono); font-size: 11px; }
+
+  .device {
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.65;
+    color: var(--ink-dim); word-break: break-word;
+  }
+  .device span { color: var(--ink-muted); }
+
+  .note {
+    font-size: 10.5px; line-height: 1.55; color: var(--ink-muted);
+    border-left: 2px solid var(--line); padding-left: 9px;
+  }
+
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0%; background: var(--periwinkle); transition: width 200ms linear; }
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <h1>Atlas cardiaco 3D — banco de pruebas</h1>
+      <p>PulseNet · iQ Technologies</p>
+    </div>
+
+    <div class="group">
+      <label class="gl" for="preset">Tamaño de canvas</label>
+      <select id="preset"></select>
+      <div class="note" id="presetNote"></div>
+    </div>
+
+    <div class="group">
+      <label class="gl" for="dpr">Densidad de píxeles</label>
+      <select id="dpr"></select>
+    </div>
+
+    <div class="group">
+      <label class="gl" for="budget">Presupuesto de geometría</label>
+      <select id="budget"></select>
+    </div>
+
+    <div class="group">
+      <label class="gl">Opciones</label>
+      <div class="toggles">
+        <label class="tg"><input type="checkbox" id="optAA"> Antialias (MSAA)</label>
+        <label class="tg"><input type="checkbox" id="optPick" checked> Picking por segmento</label>
+        <label class="tg"><input type="checkbox" id="optProxy" checked> — malla de colisión baja</label>
+        <label class="tg"><input type="checkbox" id="optBeat" checked> Latido</label>
+        <label class="tg"><input type="checkbox" id="optRot" checked> Rotación automática</label>
+        <label class="tg"><input type="checkbox" id="optVessels" checked> Coronarias</label>
+        <label class="tg"><input type="checkbox" id="optLight"> Superficie clara</label>
+      </div>
+    </div>
+
+    <div class="group">
+      <label class="gl">Medición</label>
+      <button class="primary" id="runOne">Medir configuración actual</button>
+      <button id="runSweep">Barrido de presupuestos</button>
+      <button id="runSustain">Prueba sostenida 60 s (térmica)</button>
+      <div class="bar"><i id="prog"></i></div>
+    </div>
+
+    <div class="group">
+      <label class="gl">Dispositivo</label>
+      <div class="device" id="device">leyendo…</div>
+    </div>
+
+    <div class="note">
+      Umbrales: se juzga por el <b>1% low</b>, no por el promedio. Un promedio de 60 fps con
+      caídas a 18 se siente roto. Verde ≥ 55 · ámbar ≥ 28 · rojo por debajo.
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="viewport">
+      <div id="frame">
+        <canvas id="gl"></canvas>
+        <div class="hud" id="hud">iniciando…</div>
+        <div class="segname" id="segname"><span style="color:var(--ink-muted)">Pasa el cursor sobre un segmento</span></div>
+      </div>
+    </div>
+
+    <section class="results">
+      <div class="results-head">
+        <h2>Resultados</h2>
+        <div class="spacer"></div>
+        <button id="copyBtn">Copiar JSON</button>
+        <button id="clearBtn">Limpiar</button>
+      </div>
+      <div id="tableWrap"><div class="empty">Sin mediciones todavía. Empieza por "Medir configuración actual".</div></div>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+
+/* ============================================================
+   Modelo AHA de 17 segmentos.
+   Cada segmento es una malla independiente: así se paga el costo
+   real de draw calls y de raycasting, que es lo que se mide.
+   ============================================================ */
+
+const SEGMENTS = [
+  // basales (t 0.72–1.00), 6 sectores de 60 grados
+  { id: 1,  name: 'Basal anterior',          band: 'basal',  sector: 0 },
+  { id: 2,  name: 'Basal anteroseptal',      band: 'basal',  sector: 1 },
+  { id: 3,  name: 'Basal inferoseptal',      band: 'basal',  sector: 2 },
+  { id: 4,  name: 'Basal inferior',          band: 'basal',  sector: 3 },
+  { id: 5,  name: 'Basal inferolateral',     band: 'basal',  sector: 4 },
+  { id: 6,  name: 'Basal anterolateral',     band: 'basal',  sector: 5 },
+  // medios (t 0.45–0.72)
+  { id: 7,  name: 'Medio anterior',          band: 'mid',    sector: 0 },
+  { id: 8,  name: 'Medio anteroseptal',      band: 'mid',    sector: 1 },
+  { id: 9,  name: 'Medio inferoseptal',      band: 'mid',    sector: 2 },
+  { id: 10, name: 'Medio inferior',          band: 'mid',    sector: 3 },
+  { id: 11, name: 'Medio inferolateral',     band: 'mid',    sector: 4 },
+  { id: 12, name: 'Medio anterolateral',     band: 'mid',    sector: 5 },
+  // apicales (t 0.20–0.45), 4 sectores de 90 grados
+  { id: 13, name: 'Apical anterior',         band: 'apical', sector: 0 },
+  { id: 14, name: 'Apical septal',           band: 'apical', sector: 1 },
+  { id: 15, name: 'Apical inferior',         band: 'apical', sector: 2 },
+  { id: 16, name: 'Apical lateral',          band: 'apical', sector: 3 },
+  // ápex (t 0–0.20), casquete completo
+  { id: 17, name: 'Ápex',                    band: 'apex',   sector: 0 },
+];
+
+const BANDS = {
+  basal:  { p0: 0.72, p1: 1.00, sectors: 6 },
+  mid:    { p0: 0.45, p1: 0.72, sectors: 6 },
+  apical: { p0: 0.20, p1: 0.45, sectors: 4 },
+  apex:   { p0: 0.00, p1: 0.20, sectors: 1 },
+};
+
+// Coronarias — nomenclatura SCCT abreviada. Curvas sobre la superficie del VI.
+const VESSELS = [
+  { id: 'LAD-p',  name: 'DA proximal',        pts: [[0.00,1.02],[0.10,0.86],[0.16,0.70]] },
+  { id: 'LAD-m',  name: 'DA media',           pts: [[0.16,0.70],[0.20,0.54],[0.22,0.40]] },
+  { id: 'LAD-d',  name: 'DA distal',          pts: [[0.22,0.40],[0.20,0.24],[0.12,0.10]] },
+  { id: 'D1',     name: 'Primera diagonal',   pts: [[0.17,0.66],[0.42,0.56],[0.62,0.44]] },
+  { id: 'D2',     name: 'Segunda diagonal',   pts: [[0.21,0.48],[0.44,0.38],[0.60,0.28]] },
+  { id: 'LCx-p',  name: 'Cx proximal',        pts: [[0.00,1.02],[0.62,0.94],[1.02,0.80]] },
+  { id: 'OM1',    name: 'Primer marginal',    pts: [[1.02,0.80],[1.22,0.62],[1.30,0.44]] },
+  { id: 'LCx-d',  name: 'Cx distal',          pts: [[1.02,0.80],[1.42,0.66],[1.58,0.48]] },
+  { id: 'OM2',    name: 'Segundo marginal',   pts: [[1.50,0.58],[1.66,0.42],[1.72,0.26]] },
+  { id: 'RCA-p',  name: 'CD proximal',        pts: [[3.14,1.02],[2.72,0.96],[2.40,0.86]] },
+  { id: 'RCA-m',  name: 'CD media',           pts: [[2.40,0.86],[2.20,0.70],[2.10,0.54]] },
+  { id: 'RCA-d',  name: 'CD distal',          pts: [[2.10,0.54],[2.06,0.38],[2.02,0.24]] },
+  { id: 'PDA',    name: 'Descendente post.',  pts: [[2.02,0.24],[2.60,0.20],[3.10,0.16]] },
+  { id: 'PLB',    name: 'Posterolateral',     pts: [[2.14,0.44],[2.60,0.36],[2.96,0.30]] },
+  { id: 'RI',     name: 'Ramo intermedio',    pts: [[0.55,0.92],[0.80,0.74],[0.94,0.58]] },
+  { id: 'S1',     name: 'Primera septal',     pts: [[0.15,0.72],[-0.20,0.62],[-0.42,0.50]] },
+  { id: 'S2',     name: 'Segunda septal',     pts: [[0.19,0.56],[-0.10,0.46],[-0.30,0.36]] },
+  { id: 'AM',     name: 'Marginal agudo',     pts: [[2.34,0.78],[2.46,0.60],[2.50,0.42]] },
+];
+
+// Rampas secuenciales de un solo tono. Se invierte el ancla en superficie oscura
+// (claro sobre oscuro) para conservar la monotonía perceptual de luminosidad.
+const RAMP_DARK  = ['#2E3568','#45509A','#6376C7','#8DA0E4','#B8C7F5','#E4EBFC'];
+const RAMP_LIGHT = ['#D3DAEE','#A9BCE8','#7E93D6','#5468BC','#32409A','#0F095E'];
+const NODATA_DARK = '#4A4E5E', NODATA_LIGHT = '#B9BCC4';
+
+// Densidad simulada de actividad clínica por segmento — sirve para que el barrido
+// mida el costo con materiales distintos (no comparte material entre mallas),
+// que es el escenario real del coropleto anatomico.
+const DENSITY = [0,3,5,1,0,2, 4,9,7,2,1,0, 6,12,3,1, 2];
+
+const R = 1.0, H = 1.62, WALL = 0.13, GAP = 0.016;
+
+function ellipsoidPoint(phi, theta, r, h, out) {
+  const s = Math.sin(phi);
+  return out.set(r * s * Math.cos(theta), -h * Math.cos(phi), r * s * Math.sin(theta));
+}
+function ellipsoidNormal(phi, theta, r, h, out) {
+  const p = ellipsoidPoint(phi, theta, r, h, out);
+  return out.set(p.x / (r * r), p.y / (h * h), p.z / (r * r)).normalize();
+}
+
+const PHI_MAX = Math.PI * 0.62; // ápex a base, elipsoide truncado
+
+function buildSegmentGeometry(seg, nU, nV) {
+  const band = BANDS[seg.band];
+  const isApex = seg.band === 'apex';
+
+  // Rango longitudinal, con separación entre bandas.
+  const pad = isApex ? 0 : GAP;
+  const phi0 = (band.p0 + pad) * PHI_MAX;
+  const phi1 = (band.p1 - GAP) * PHI_MAX;
+
+  // Rango circunferencial. El ápex es un casquete completo.
+  const arc = (Math.PI * 2) / band.sectors;
+  // Segmento 1 (basal anterior) centrado al frente; sentido antihorario.
+  const tGap = isApex ? 0 : GAP * 1.6;
+  const th0 = isApex ? 0 : seg.sector * arc + tGap - arc / 2;
+  const th1 = isApex ? Math.PI * 2 : (seg.sector + 1) * arc - tGap - arc / 2;
+
+  const uCount = nU + 1, vCount = nV + 1;
+  const vertsPerSurface = uCount * vCount;
+  const positions = new Float32Array(vertsPerSurface * 2 * 3);
+  const normals = new Float32Array(vertsPerSurface * 2 * 3);
+
+  const p = new THREE.Vector3(), n = new THREE.Vector3();
+  let o = 0;
+
+  // Superficie externa, luego interna (desplazada hacia dentro por el grosor).
+  for (let surface = 0; surface < 2; surface++) {
+    const inset = surface === 0 ? 0 : WALL;
+    const flip = surface === 0 ? 1 : -1;
+    for (let i = 0; i < uCount; i++) {
+      const phi = Math.max(1e-4, phi0 + (phi1 - phi0) * (i / nU));
+      for (let j = 0; j < vCount; j++) {
+        const theta = th0 + (th1 - th0) * (j / nV);
+        ellipsoidNormal(phi, theta, R, H, n);
+        ellipsoidPoint(phi, theta, R, H, p);
+        positions[o] = p.x - n.x * inset;
+        positions[o + 1] = p.y - n.y * inset;
+        positions[o + 2] = p.z - n.z * inset;
+        normals[o] = n.x * flip; normals[o + 1] = n.y * flip; normals[o + 2] = n.z * flip;
+        o += 3;
+      }
+    }
+  }
+
+  const idx = [];
+  const quad = (a, b, c, d) => { idx.push(a, b, d, b, c, d); };
+
+  for (let surface = 0; surface < 2; surface++) {
+    const base = surface * vertsPerSurface;
+    for (let i = 0; i < nU; i++) {
+      for (let j = 0; j < nV; j++) {
+        const a = base + i * vCount + j, b = a + vCount, c = b + 1, d = a + 1;
+        if (surface === 0) quad(a, b, c, d); else quad(d, c, b, a);
+      }
+    }
+  }
+
+  // Bordes: unen superficie externa e interna para que el segmento sea sólido.
+  const IN = vertsPerSurface;
+  for (let j = 0; j < nV; j++) { // borde basal
+    const a = (nU) * vCount + j;
+    quad(a, a + 1, IN + a + 1, IN + a);
+  }
+  if (!isApex) {
+    for (let j = 0; j < nV; j++) { // borde apical
+      const a = j;
+      quad(IN + a, IN + a + 1, a + 1, a);
+    }
+    for (let i = 0; i < nU; i++) { // costados
+      const a = i * vCount, b = a + vCount;
+      quad(a, IN + a, IN + b, b);
+      const c = i * vCount + nV, d = c + vCount;
+      quad(IN + c, c, d, IN + d);
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+
+function vesselCurve(pts) {
+  const v = pts.map(([theta, t]) => {
+    const phi = Math.max(0.02, t * PHI_MAX);
+    const p = ellipsoidPoint(phi, theta, R, H, new THREE.Vector3());
+    const n = ellipsoidNormal(phi, theta, R, H, new THREE.Vector3());
+    return p.addScaledVector(n, 0.035); // apoyadas sobre el epicardio
+  });
+  return new THREE.CatmullRomCurve3(v);
+}
+
+/* ============================================================
+   Escena
+   ============================================================ */
+
+const frame = document.getElementById('frame');
+let canvas = document.getElementById('gl');
+let renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
+renderer.setClearColor(0x0A0D36, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+camera.position.set(2.9, 1.5, 3.4);
+camera.lookAt(0, -0.12, 0);
+
+const key = new THREE.DirectionalLight(0xffffff, 2.1); key.position.set(3, 4, 3);
+const fill = new THREE.DirectionalLight(0xBACFFF, 0.85); fill.position.set(-3, -1, -2);
+scene.add(key, fill, new THREE.AmbientLight(0xffffff, 0.55));
+
+const root = new THREE.Group();
+scene.add(root);
+const myoGroup = new THREE.Group(), vesselGroup = new THREE.Group(), pickGroup = new THREE.Group();
+pickGroup.visible = false;   // nunca se dibuja; sólo existe para el raycast
+root.add(myoGroup, vesselGroup, pickGroup);
+
+let segMeshes = [], vesselMeshes = [], pickMeshes = [], currentAA = false;
+
+const PICK_MAT = new THREE.MeshBasicMaterial({ visible: false });
+
+function rampColor(density, light) {
+  const ramp = light ? RAMP_LIGHT : RAMP_DARK;
+  if (density <= 0) return light ? NODATA_LIGHT : NODATA_DARK;
+  const max = Math.max(...DENSITY);
+  const step = Math.min(ramp.length - 1, Math.floor((density / max) * (ramp.length - 1) + 0.5));
+  return ramp[step];
+}
+
+function disposeAll() {
+  for (const m of [...segMeshes, ...vesselMeshes, ...pickMeshes]) {
+    m.geometry.dispose();
+    if (m.material.dispose) m.material.dispose();
+  }
+  myoGroup.clear(); vesselGroup.clear(); pickGroup.clear();
+  segMeshes = []; vesselMeshes = []; pickMeshes = [];
+}
+
+function buildScene(targetTriangles) {
+  disposeAll();
+  const light = document.getElementById('optLight').checked;
+
+  // Reparte el presupuesto entre los 17 segmentos y resuelve la teselación.
+  // ~4 triángulos por celda (externa + interna), aspecto 1 : 1.5.
+  const perSeg = targetTriangles / SEGMENTS.length;
+  const nU = Math.max(2, Math.round(Math.sqrt(perSeg / (4 * 1.5))));
+  const nV = Math.max(3, Math.round(nU * 1.5));
+
+  for (const seg of SEGMENTS) {
+    const g = buildSegmentGeometry(seg, nU, seg.band === 'apex' ? nV * 3 : nV);
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(rampColor(DENSITY[seg.id - 1], light)),
+      roughness: 0.62, metalness: 0.04, flatShading: false,
+    });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.userData = { seg, baseColor: mat.color.clone() };
+    myoGroup.add(mesh); segMeshes.push(mesh);
+
+    // Proxy de colisión: misma forma, teselación fija y mínima. El raycast de
+    // three.js es fuerza bruta sobre triángulos, así que picar contra la malla
+    // visible cuesta proporcional al presupuesto de geometría.
+    const pg = buildSegmentGeometry(seg, 3, seg.band === 'apex' ? 12 : 5);
+    const pm = new THREE.Mesh(pg, PICK_MAT);
+    pm.userData = { target: mesh };
+    pickGroup.add(pm); pickMeshes.push(pm);
+  }
+
+  const tubeSeg = Math.max(8, Math.round(nU * 0.45));
+  for (const v of VESSELS) {
+    const g = new THREE.TubeGeometry(vesselCurve(v.pts), tubeSeg, 0.028, Math.max(5, Math.round(tubeSeg * 0.4)), false);
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(light ? 0x5468BC : 0xB8C7F5), roughness: 0.4, metalness: 0.1,
+    });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.userData = { seg: { id: v.id, name: v.name, band: 'coronaria' }, baseColor: mat.color.clone() };
+    vesselGroup.add(mesh); vesselMeshes.push(mesh);
+  }
+
+  vesselGroup.visible = document.getElementById('optVessels').checked;
+  renderer.setClearColor(light ? 0xF4F6FC : 0x0A0D36, 1);
+  frame.classList.toggle('light', light);
+  renderer.info.reset();
+}
+
+/* ============================================================
+   Configuración y presets
+   ============================================================ */
+
+// Tamaños reales del panel del Case Manager (layout 30/40/resto de CaseManager.vue),
+// no tamaños inventados: el canvas vive dentro de un panel, no a pantalla completa.
+const PRESETS = [
+  { id: 'panel-1440', label: 'Panel derecho — desktop 1440', w: 400, h: 700,
+    note: 'Panel derecho del Case Manager en una pantalla de 1440 px.' },
+  { id: 'panel-1920', label: 'Panel derecho — desktop 1920', w: 540, h: 880,
+    note: 'Misma proporción en monitor de 1920 px.' },
+  { id: 'panel-mid',  label: 'Panel central — desktop 1440', w: 560, h: 700,
+    note: 'Si el atlas ocupa el panel central del 40 % en lugar del derecho.' },
+  { id: 'tablet',     label: 'Tablet apilado — 768', w: 768, h: 520,
+    note: 'Por debajo de md los paneles pasan a w-full y se apilan.' },
+  { id: 'mobile',     label: 'Móvil apilado — 390', w: 390, h: 420,
+    note: 'iPhone en vertical, panel a ancho completo.' },
+  { id: 'full',       label: 'Pantalla completa', w: 0, h: 0,
+    note: 'Peor caso. Solo para comparar; no es la condición real de uso.' },
+];
+
+const DPRS = [
+  { id: '1',    label: '1.0 — sin retina', v: 1 },
+  { id: '1.5',  label: '1.5', v: 1.5 },
+  { id: '2',    label: '2.0 — retina', v: 2 },
+  { id: 'nat',  label: 'Nativa del dispositivo', v: 0 },
+  { id: 'cap2', label: 'Nativa, limitada a 2.0', v: -2 },
+];
+
+const BUDGETS = [
+  { id: '50k',   label: '50 000 triángulos — mínimo',      t: 50000 },
+  { id: '150k',  label: '150 000 triángulos — bajo',       t: 150000 },
+  { id: '400k',  label: '400 000 triángulos — medio',      t: 400000 },
+  { id: '800k',  label: '800 000 triángulos — objetivo',   t: 800000 },
+  { id: '1500k', label: '1 500 000 triángulos — alto',     t: 1500000 },
+  { id: '2500k', label: '2 500 000 triángulos — extremo',  t: 2500000 },
+];
+
+const $ = (id) => document.getElementById(id);
+const fill_ = (sel, arr, def) => {
+  sel.innerHTML = arr.map((o) => `<option value="${o.id}">${o.label}</option>`).join('');
+  sel.value = def;
+};
+fill_($('preset'), PRESETS, 'panel-1440');
+fill_($('dpr'), DPRS, 'cap2');
+fill_($('budget'), BUDGETS, '400k');
+
+function currentPreset() { return PRESETS.find((p) => p.id === $('preset').value); }
+function currentDPR() {
+  const d = DPRS.find((x) => x.id === $('dpr').value).v;
+  if (d === 0) return window.devicePixelRatio || 1;
+  if (d === -2) return Math.min(2, window.devicePixelRatio || 1);
+  return d;
+}
+function currentBudget() { return BUDGETS.find((b) => b.id === $('budget').value); }
+
+function applySize() {
+  const p = currentPreset();
+  let w = p.w, h = p.h;
+  if (p.id === 'full') {
+    const vp = document.querySelector('.viewport').getBoundingClientRect();
+    w = Math.max(240, Math.floor(vp.width - 36));
+    h = Math.max(240, Math.floor(vp.height - 36));
+  }
+  // No dejar que el preset desborde la ventana en móvil.
+  const vp = document.querySelector('.viewport').getBoundingClientRect();
+  w = Math.min(w, Math.floor(vp.width - 36));
+  h = Math.min(h, Math.floor(Math.max(240, vp.height - 36)));
+
+  frame.style.width = w + 'px';
+  frame.style.height = h + 'px';
+  renderer.setPixelRatio(currentDPR());
+  renderer.setSize(w, h, false);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  fitCamera();
+  $('presetNote').textContent = p.note;
+  return { w, h };
+}
+
+// El panel del Case Manager es estrecho y alto: el lado que limita el encuadre es
+// el horizontal, no el vertical. Ajustar sólo por fov vertical recorta el modelo.
+const FIT_TARGET = new THREE.Vector3(0, -0.30, 0);
+const FIT_RADIUS = 1.28;   // radio que envuelve el VI más las coronarias
+const FIT_DIR = new THREE.Vector3(0.62, 0.34, 0.71).normalize();
+
+function fitCamera() {
+  const vFov = (camera.fov * Math.PI) / 180;
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+  const dist = FIT_RADIUS / Math.sin(Math.min(vFov, hFov) / 2);
+  camera.position.copy(FIT_TARGET).addScaledVector(FIT_DIR, dist * 1.04);
+  camera.lookAt(FIT_TARGET);
+  camera.near = Math.max(0.05, dist - FIT_RADIUS * 2);
+  camera.far = dist + FIT_RADIUS * 3;
+  camera.updateProjectionMatrix();
+}
+
+function rebuildRenderer(aa) {
+  // El antialias sólo se puede fijar al crear el contexto WebGL: hay que
+  // descartar el canvas y levantar uno nuevo.
+  if (aa === currentAA) return;
+  currentAA = aa;
+  const old = canvas;
+  const nc = document.createElement('canvas');
+  nc.id = 'gl';
+  old.replaceWith(nc);
+  renderer.dispose();
+  canvas = nc;
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: aa, alpha: false, powerPreference: 'high-performance' });
+  attachPointer();
+  renderDevice();
+}
+
+/* ============================================================
+   Bucle de render y muestreo
+   ============================================================ */
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2(0.15, 0.1);
+let hovered = null, pickMs = 0, autoPick = true;
+let frames = [], lastT = performance.now(), hudT = 0, beatPhase = 0;
+
+function attachPointer() {
+  canvas.addEventListener('pointermove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    autoPick = false;
+  });
+  canvas.addEventListener('pointerleave', () => { autoPick = true; });
+}
+attachPointer();
+
+let pickTargets = [];
+function refreshPickTargets() {
+  const myo = $('optProxy').checked ? pickMeshes : segMeshes;
+  pickTargets = vesselGroup.visible ? [...myo, ...vesselMeshes] : [...myo];
+}
+
+function doPick() {
+  const t0 = performance.now();
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(pickTargets, false);
+  pickMs = performance.now() - t0;
+
+  const raw = hits.length ? hits[0].object : null;
+  const hit = raw ? (raw.userData.target || raw) : null;
+  if (hit === hovered) return;
+  if (hovered) hovered.material.color.copy(hovered.userData.baseColor);
+  hovered = hit;
+  const el = $('segname');
+  if (hovered) {
+    hovered.material.color.copy(hovered.userData.baseColor).offsetHSL(0, 0.05, 0.14);
+    const s = hovered.userData.seg;
+    const d = typeof s.id === 'number' ? DENSITY[s.id - 1] : null;
+    const col = '#' + hovered.userData.baseColor.getHexString();
+    el.innerHTML =
+      `<span class="swatch" style="background:${col}"></span>` +
+      `<span>${typeof s.id === 'number' ? 'Segmento ' + s.id + ' — ' : ''}${s.name}</span>` +
+      (d === null ? '' : `<span class="count">${d} ${d === 1 ? 'elemento' : 'elementos'}</span>`);
+  } else {
+    el.innerHTML = '<span style="color:var(--ink-muted)">Pasa el cursor sobre un segmento</span>';
+  }
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  const now = performance.now();
+  const dt = now - lastT; lastT = now;
+  frames.push(dt);
+  if (frames.length > 900) frames.shift();
+
+  if ($('optRot').checked) root.rotation.y += dt * 0.00028;
+
+  if ($('optBeat').checked) {
+    // Latido: escala no uniforme, barata, sólo transform.
+    beatPhase += dt * 0.0013;
+    const c = Math.sin(beatPhase * Math.PI * 2);
+    const s = 1 + (c > 0 ? Math.pow(c, 2.4) * 0.05 : 0);
+    root.scale.set(s, 1 + (s - 1) * 0.55, s);
+  } else {
+    root.scale.set(1, 1, 1);
+  }
+
+  if ($('optPick').checked) {
+    if (autoPick) {
+      // Barrido automático: mide el peor caso del raycast sin depender del ratón.
+      pointer.x = Math.sin(now * 0.00062) * 0.55;
+      pointer.y = Math.cos(now * 0.00047) * 0.45;
+    }
+    doPick();
+  }
+
+  renderer.render(scene, camera);
+
+  if (now - hudT > 320) {
+    hudT = now;
+    const s = stats(frames.slice(-180));
+    const info = renderer.info.render;
+    $('hud').innerHTML =
+      `<b>${s.mean.toFixed(0)}</b> fps med · <b>${s.p1low.toFixed(0)}</b> 1% low<br>` +
+      `${(info.triangles / 1000).toFixed(0)}k tri · ${info.calls} draw calls<br>` +
+      `${canvas.width}×${canvas.height} px · dpr ${renderer.getPixelRatio()}` +
+      ($('optPick').checked ? `<br>raycast ${pickMs.toFixed(2)} ms` : '');
+  }
+}
+
+function stats(arr) {
+  if (!arr.length) return { mean: 0, p1low: 0, p95: 0, p50: 0 };
+  const sorted = [...arr].sort((a, b) => a - b);
+  const sum = arr.reduce((a, b) => a + b, 0);
+  const pct = (p) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+  return {
+    mean: 1000 / (sum / arr.length),
+    p1low: 1000 / pct(0.99),   // el 1 % de cuadros más lentos
+    p50: pct(0.5),
+    p95: pct(0.95),
+  };
+}
+
+/* ============================================================
+   Ejecución de mediciones
+   ============================================================ */
+
+const results = [];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Los navegadores limitan requestAnimationFrame a ~1 fps cuando la pestaña no está
+   visible. Medir en ese estado devuelve "no viable" siempre, y es falso. Se bloquea
+   el arranque si la pestaña está oculta y se invalida cualquier corrida que pierda
+   visibilidad a mitad — importa sobre todo en la prueba sostenida de 60 s, donde la
+   pantalla del tablet puede atenuarse sola. */
+let visibilityBroken = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) visibilityBroken = true;
+});
+
+function guardVisible() {
+  if (!document.hidden) { visibilityBroken = false; return true; }
+  $('segname').innerHTML =
+    '<span style="color:var(--bad)">La pestaña está en segundo plano. ' +
+    'Tráela al frente: en segundo plano el navegador limita el render a 1 fps y la medición no sirve.</span>';
+  return false;
+}
+
+function verdictOf(p1low) {
+  if (p1low >= 55) return { txt: '60 fps sólido', cls: 'v-ok' };
+  if (p1low >= 28) return { txt: '30 fps usable', cls: 'v-warn' };
+  return { txt: 'no viable', cls: 'v-bad' };
+}
+
+async function measure(label, seconds = 5) {
+  frames = [];
+  await sleep(900);            // calentamiento: compilación de shaders y subida de buffers
+  frames = [];
+  const t0 = performance.now();
+  while (performance.now() - t0 < seconds * 1000) await sleep(100);
+  const s = stats(frames);
+  const info = renderer.info.render;
+  const p = currentPreset();
+  const row = {
+    label,
+    preset: p.label,
+    px: `${canvas.width}×${canvas.height}`,
+    dpr: renderer.getPixelRatio(),
+    budget: currentBudget().label.split(' — ')[0],
+    triangles: info.triangles,
+    calls: info.calls,
+    aa: $('optAA').checked,
+    picking: $('optPick').checked,
+    pickProxy: $('optProxy').checked,
+    pickMs: +pickMs.toFixed(2),
+    fpsMean: +s.mean.toFixed(1),
+    fps1Low: +s.p1low.toFixed(1),
+    ms95: +s.p95.toFixed(2),
+    verdict: visibilityBroken ? 'INVÁLIDA — pestaña oculta' : verdictOf(s.p1low).txt,
+    invalid: visibilityBroken,
+  };
+  results.push(row);
+  renderTable();
+  return row;
+}
+
+function renderTable() {
+  const wrap = $('tableWrap');
+  if (!results.length) {
+    wrap.innerHTML = '<div class="empty">Sin mediciones todavía. Empieza por "Medir configuración actual".</div>';
+    return;
+  }
+  const head = ['Prueba', 'Canvas', 'Píxeles', 'DPR', 'Triángulos', 'Draws', 'AA', 'Raycast', 'fps med', '1% low', 'p95 ms', 'Veredicto'];
+  const rows = results.map((r) => {
+    const v = r.invalid ? { cls: 'v-bad' } : verdictOf(r.fps1Low);
+    const pick = !r.picking ? '—'
+      : `${r.pickMs} ms${r.pickProxy ? ' proxy' : ' directo'}`;
+    return `<tr>
+      <td>${r.label}</td><td>${r.preset}</td><td>${r.px}</td><td>${r.dpr}</td>
+      <td>${r.triangles.toLocaleString('es')}</td><td>${r.calls}</td>
+      <td>${r.aa ? 'sí' : 'no'}</td><td>${pick}</td>
+      <td>${r.fpsMean}</td><td>${r.fps1Low}</td><td>${r.ms95}</td>
+      <td class="verdict ${v.cls}">${r.verdict}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function setBusy(b, pct = 0) {
+  for (const id of ['runOne', 'runSweep', 'runSustain']) $(id).disabled = b;
+  $('prog').style.width = (b ? pct : 0) + '%';
+}
+
+$('runOne').onclick = async () => {
+  if (!guardVisible()) return;
+  setBusy(true, 30);
+  await measure(currentBudget().id);
+  setBusy(false);
+};
+
+$('runSweep').onclick = async () => {
+  if (!guardVisible()) return;
+  setBusy(true, 0);
+  for (let i = 0; i < BUDGETS.length; i++) {
+    $('budget').value = BUDGETS[i].id;
+    buildScene(BUDGETS[i].t);
+    applySize();
+    setBusy(true, ((i + 0.5) / BUDGETS.length) * 100);
+    const row = await measure(BUDGETS[i].id, 5);
+    setBusy(true, ((i + 1) / BUDGETS.length) * 100);
+    // Corta el barrido si ya no da ni 20 fps: subir más triángulos no informa nada.
+    if (row.fps1Low < 20) break;
+  }
+  setBusy(false);
+};
+
+$('runSustain').onclick = async () => {
+  if (!guardVisible()) return;
+  setBusy(true, 0);
+  frames = [];
+  await sleep(600);
+  frames = [];
+  const t0 = performance.now();
+  const early = [], late = [];
+  while (performance.now() - t0 < 60000) {
+    await sleep(200);
+    const el = performance.now() - t0;
+    setBusy(true, (el / 60000) * 100);
+    const recent = frames.slice(-12);
+    if (el < 12000) early.push(...recent);
+    if (el > 48000) late.push(...recent);
+  }
+  const a = stats(early), b = stats(late);
+  const drop = a.mean > 0 ? ((a.mean - b.mean) / a.mean) * 100 : 0;
+  results.push({
+    label: 'sostenida 60 s',
+    preset: currentPreset().label,
+    px: `${canvas.width}×${canvas.height}`,
+    dpr: renderer.getPixelRatio(),
+    budget: currentBudget().label.split(' — ')[0],
+    triangles: renderer.info.render.triangles,
+    calls: renderer.info.render.calls,
+    aa: $('optAA').checked,
+    picking: $('optPick').checked,
+    pickProxy: $('optProxy').checked,
+    pickMs: +pickMs.toFixed(2),
+    fpsMean: +b.mean.toFixed(1),
+    fps1Low: +b.p1low.toFixed(1),
+    ms95: +b.p95.toFixed(2),
+    thermalDropPct: +drop.toFixed(1),
+    fpsFirst12s: +a.mean.toFixed(1),
+    invalid: visibilityBroken,
+    verdict: visibilityBroken
+      ? 'INVÁLIDA — pestaña oculta'
+      : verdictOf(b.p1low).txt + (drop > 15 ? ` · throttling ${drop.toFixed(0)}%` : ''),
+  });
+  renderTable();
+  setBusy(false);
+};
+
+$('clearBtn').onclick = () => { results.length = 0; renderTable(); };
+
+$('copyBtn').onclick = async () => {
+  const payload = JSON.stringify({ device: deviceInfo(), results }, null, 2);
+  try {
+    await navigator.clipboard.writeText(payload);
+    $('copyBtn').textContent = 'Copiado';
+  } catch {
+    // Safari sin permisos de portapapeles: descarga como archivo.
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'pulsenet-atlas-perf.json'; a.click();
+    URL.revokeObjectURL(url);
+    $('copyBtn').textContent = 'Descargado';
+  }
+  setTimeout(() => { $('copyBtn').textContent = 'Copiar JSON'; }, 1600);
+};
+
+/* ============================================================
+   Información del dispositivo
+   ============================================================ */
+
+function deviceInfo() {
+  const gl = renderer.getContext();
+  let gpu = 'no expuesta';
+  try {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) gpu = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+  } catch { /* Safari puede bloquearlo */ }
+  return {
+    ua: navigator.userAgent,
+    gpu,
+    webgl2: !!gl.getParameter && typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext,
+    dprNative: window.devicePixelRatio,
+    screen: `${screen.width}×${screen.height}`,
+    viewport: `${innerWidth}×${innerHeight}`,
+    cores: navigator.hardwareConcurrency || null,
+    memGB: navigator.deviceMemory || null,
+    maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+  };
+}
+
+function renderDevice() {
+  const d = deviceInfo();
+  $('device').innerHTML = [
+    `<span>gpu</span> ${d.gpu}`,
+    `<span>webgl2</span> ${d.webgl2 ? 'sí' : 'no'}`,
+    `<span>dpr nativa</span> ${d.dprNative}`,
+    `<span>pantalla</span> ${d.screen}`,
+    `<span>núcleos</span> ${d.cores ?? 'n/d'}`,
+    `<span>memoria</span> ${d.memGB ? d.memGB + ' GB' : 'n/d'}`,
+    `<span>tex máx</span> ${d.maxTexture}`,
+  ].join('<br>');
+}
+
+/* ============================================================
+   Arranque
+   ============================================================ */
+
+for (const id of ['preset', 'dpr']) $(id).onchange = () => applySize();
+$('budget').onchange = () => { buildScene(currentBudget().t); applySize(); refreshPickTargets(); };
+$('optVessels').onchange = () => {
+  vesselGroup.visible = $('optVessels').checked;
+  refreshPickTargets();
+};
+$('optProxy').onchange = () => refreshPickTargets();
+$('optLight').onchange = () => { buildScene(currentBudget().t); applySize(); refreshPickTargets(); };
+$('optAA').onchange = (e) => {
+  rebuildRenderer(e.target.checked);
+  buildScene(currentBudget().t);
+  applySize();
+  refreshPickTargets();
+};
+addEventListener('resize', () => applySize());
+
+buildScene(currentBudget().t);
+applySize();
+refreshPickTargets();
+renderDevice();
+tick();
+</script>

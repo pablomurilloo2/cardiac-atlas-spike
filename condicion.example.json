@@ -1,0 +1,36 @@
+{
+  "_formato": "Esquema de condición personal — LOCAL Y ANÓNIMO. Sin nombres, sin documentos de identidad, sin fechas de nacimiento. Cada hallazgo apunta a una estructura anatómica por concepto FMA o por coincidencia de nombre (inglés, como en BodyParts3D). 'status' controla el color; 'source' cita el examen que lo documenta, solo tipo y fecha.",
+  "_estados": {
+    "hallazgo": "documentado, sin acción pendiente (azul)",
+    "vigilancia": "en seguimiento periódico (ámbar)",
+    "tratamiento": "en manejo activo (rojo)",
+    "resuelto": "confirmado resuelto (verde)"
+  },
+  "updated": "2026-09-09",
+  "findings": [
+    {
+      "id": "ej1",
+      "label": "Ejemplo: esteatosis hepática leve",
+      "target": { "nameIncludes": "liver" },
+      "status": "vigilancia",
+      "source": "Ecografía abdominal — 2026-05",
+      "note": "Control anual sugerido en el informe."
+    },
+    {
+      "id": "ej2",
+      "label": "Ejemplo: quiste renal simple derecho",
+      "target": { "nameIncludes": "right kidney" },
+      "status": "hallazgo",
+      "source": "Ecografía abdominal — 2026-05",
+      "note": "Bosniak I, sin significado clínico según el informe."
+    },
+    {
+      "id": "ej3",
+      "label": "Ejemplo: fractura consolidada",
+      "target": { "nameIncludes": "left clavicle" },
+      "status": "resuelto",
+      "source": "Radiografía — 2019",
+      "note": "Antecedente, sin secuelas."
+    }
+  ]
+}

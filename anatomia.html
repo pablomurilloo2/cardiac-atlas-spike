@@ -1,0 +1,852 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anatomía completa — esquema de condición</title>
+
+<style>
+  :root {
+    --ink: #111827; --mut: #6B7280; --faint: #9CA3AF;
+    --line: #E5E7EB; --panel: rgba(255,255,255,0.94);
+    --accent: #2563EB;
+    --st-hallazgo: #2563EB; --st-vigilancia: #D97706;
+    --st-tratamiento: #DC2626; --st-resuelto: #059669;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFB; color: var(--ink); font-family: var(--sans);
+         font-size: 13px; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  .hdr { position: absolute; top: 22px; left: 24px; pointer-events: none; z-index: 2; }
+  .eyebrow { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+             letter-spacing: 0.14em; color: var(--faint); }
+  .hdr h1 { margin: 3px 0 2px; font-size: 19px; font-weight: 650; letter-spacing: -0.02em; }
+  .hdr .meta { font-size: 11.5px; color: var(--mut); }
+  .hdr .meta a { color: var(--mut); pointer-events: auto; }
+  .hint { position: absolute; top: 26px; right: 24px; font-family: var(--mono);
+          font-size: 10px; color: var(--faint); pointer-events: none; }
+
+  .panel {
+    position: absolute; top: 92px; left: 24px; width: 248px;
+    max-height: calc(100dvh - 130px); overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.07); padding: 6px 0; z-index: 2;
+  }
+  .panel::-webkit-scrollbar { width: 0; }
+  details { border-bottom: 1px solid #F0F1F3; }
+  details:last-of-type { border-bottom: 0; }
+  summary { list-style: none; cursor: pointer; user-select: none; padding: 10px 16px;
+            font-size: 12px; font-weight: 600; display: flex; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; margin-left: auto; color: var(--faint); font-weight: 400; }
+  details[open] summary::after { content: '−'; }
+  .sec { padding: 2px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+  .tg { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; user-select: none; }
+  .tg input { appearance: none; width: 30px; height: 18px; border-radius: 10px; background: #E3E5E8;
+              margin: 0; position: relative; cursor: pointer; transition: background 150ms ease; flex: none; }
+  .tg input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+                     border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+                     transition: left 150ms ease; }
+  .tg input:checked { background: var(--accent); }
+  .tg input:checked::after { left: 14px; }
+  .tg .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .note { font-size: 10.5px; line-height: 1.5; color: var(--faint); }
+  .stat { font-family: var(--mono); font-size: 10.5px; line-height: 1.7; color: var(--mut); }
+  .stat b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- panel de condición, derecha ---------- */
+  .cond {
+    position: absolute; top: 92px; right: 24px; width: 280px;
+    max-height: calc(100dvh - 130px); overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.07); padding: 14px 16px; z-index: 2;
+  }
+  .cond::-webkit-scrollbar { width: 0; }
+  .cond h2 { margin: 0 0 2px; font-size: 12.5px; font-weight: 650; }
+  .cond .sub { font-size: 10.5px; color: var(--faint); margin-bottom: 10px; }
+  .finding { padding: 9px 0; border-top: 1px solid #F0F1F3; cursor: pointer; }
+  .finding:hover .fl { color: var(--accent); }
+  .finding.active { background: #F3F6FF; margin: 0 -16px; padding-left: 16px; padding-right: 16px;
+                    border-left: 3px solid var(--accent); }
+  .tour { display: flex; gap: 6px; align-items: center; margin: 8px 0 2px; }
+  .tour button { font-family: var(--mono); font-size: 11px; background: #fff; color: var(--mut);
+                 border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+  .tour button:hover { color: var(--ink); border-color: #C7CBD1; }
+  .tour button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tour .ctr { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-left: auto; }
+  .finding .fl { font-size: 12px; font-weight: 550; display: flex; gap: 7px; align-items: baseline; }
+  .finding .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; }
+  .finding .fs { font-size: 10.5px; color: var(--mut); margin-top: 2px; }
+  .finding .fn { font-size: 10.5px; color: var(--faint); margin-top: 1px; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+  .legend span { font-size: 9.5px; color: var(--mut); display: flex; gap: 4px; align-items: center;
+                 font-family: var(--mono); }
+  .legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  .readout {
+    position: absolute; bottom: 20px; left: 24px; max-width: 480px;
+    font-family: var(--mono); font-size: 11px;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 6px 22px rgba(17,24,39,0.06);
+    padding: 8px 12px; min-height: 30px; display: flex; align-items: center; gap: 8px;
+    pointer-events: none; z-index: 2;
+  }
+  .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  .flabel {
+    position: absolute; transform: translate(-50%, -130%);
+    font-family: var(--mono); font-size: 9.5px; color: #374151;
+    background: rgba(255,255,255,0.88); border: 1px solid rgba(17,24,39,0.08);
+    padding: 1px 7px; border-radius: 9px; white-space: nowrap;
+    transition: opacity 200ms ease; pointer-events: none;
+  }
+  .flabel i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+
+  .informe { margin-top: 6px; }
+  .informe summary { font-family: var(--mono); font-size: 10px; color: var(--accent);
+                     cursor: pointer; list-style: none; }
+  .informe summary::-webkit-details-marker { display: none; }
+  .informe pre { white-space: pre-wrap; font-family: var(--sans); font-size: 11px;
+                 line-height: 1.55; color: #374151; background: #F6F7F9;
+                 border-left: 3px solid var(--accent); border-radius: 6px;
+                 padding: 8px 10px; margin: 5px 0 0; }
+  .sd-informe { max-height: 160px; overflow-y: auto; margin-top: 8px; }
+  .thumbs { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .thumbs img { width: 56px; height: 42px; object-fit: cover; border-radius: 5px;
+                border: 1px solid var(--line); cursor: pointer; transition: transform 120ms ease; }
+  .thumbs img:hover { transform: scale(1.06); border-color: var(--accent); }
+  .slicedock {
+    position: absolute; right: 24px; bottom: 20px; width: 300px; z-index: 3;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.1); padding: 12px 14px; display: none;
+  }
+  .slicedock.on { display: block; }
+  .slicedock .sd-t { font-size: 11px; font-weight: 650; display: flex; align-items: center; }
+  .slicedock .sd-t button { margin-left: auto; border: 0; background: none; cursor: pointer;
+                            color: var(--faint); font-size: 14px; }
+  .slicedock .sd-n { font-family: var(--mono); font-size: 10px; color: var(--faint); margin: 3px 0 6px; }
+  .lightbox { position: fixed; inset: 0; background: rgba(10,12,20,0.93); z-index: 50;
+              display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+  .lightbox.on { display: flex; }
+  .lightbox img { max-width: 88vw; max-height: 78vh; border-radius: 8px; }
+  .lightbox .cap { color: #C8CEDC; font-family: var(--mono); font-size: 11px; }
+  .lightbox .nav { display: flex; gap: 10px; }
+  .lightbox button { font-family: var(--mono); font-size: 12px; background: rgba(255,255,255,0.1);
+                     color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px;
+                     padding: 7px 16px; cursor: pointer; }
+  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: var(--mono); font-size: 12px; color: var(--faint); background: #FAFAFB; z-index: 9; }
+</style>
+
+<div class="stage">
+  <canvas id="gl"></canvas>
+  <div id="flabels" style="position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1"></div>
+
+  <header class="hdr">
+    <div class="eyebrow">Anatomía completa · local</div>
+    <h1>Esquema de condición</h1>
+    <div class="meta">2.234 piezas · BodyParts3D · <a href="./">portada</a></div>
+  </header>
+  <div class="hint">arrastra: rotar · rueda: zoom · doble clic: enfocar · doble clic al vacío o tecla 0: vista general</div>
+
+  <aside class="panel">
+    <details open>
+      <summary>Sistemas</summary>
+      <div class="sec" id="systems"></div>
+    </details>
+    <details>
+      <summary>Presentación</summary>
+      <div class="sec">
+        <label class="tg" style="flex-direction:column;align-items:stretch;gap:3px">
+          <span style="font-size:11px;color:var(--mut)">Opacidad de la silueta</span>
+          <input type="range" id="skinT" min="0" max="30" value="6">
+        </label>
+        <label class="tg"><input type="checkbox" id="condFocus" checked> Resaltar la condición</label>
+        <label class="tg"><input type="checkbox" id="onlyCond"> Solo estructuras con hallazgos</label>
+      </div>
+    </details>
+    <details>
+      <summary>Render</summary>
+      <div class="sec">
+        <div class="stat" id="stat">cargando…</div>
+        <div class="note">BodyParts3D, © DBCLS, CC BY 4.0. Anatomía de REFERENCIA de un adulto
+        masculino: el esquema ubica tus hallazgos documentados sobre un cuerpo estándar —
+        no es una imagen tuya ni sustituye tus estudios.</div>
+      </div>
+    </details>
+  </aside>
+
+  <aside class="cond">
+    <h2>Mi condición</h2>
+    <div class="sub" id="condMeta">buscando condicion.json…</div>
+    <div class="legend">
+      <span><i style="background:var(--st-hallazgo)"></i>hallazgo</span>
+      <span><i style="background:var(--st-vigilancia)"></i>vigilancia</span>
+      <span><i style="background:var(--st-tratamiento)"></i>tratamiento</span>
+      <span><i style="background:var(--st-resuelto)"></i>resuelto</span>
+    </div>
+    <div class="tour">
+      <button class="primary" id="tourStart">Recorrer</button>
+      <button id="tourPrev">‹</button>
+      <button id="tourNext">›</button>
+      <span class="ctr" id="tourCtr"></span>
+    </div>
+    <div id="findings"></div>
+    <div class="note" style="margin-top:10px">
+      Archivo local <b>condicion.json</b> — anónimo por diseño: estructuras y citas de examen,
+      nunca nombres ni identificadores. Este esquema refleja lo que tus informes ya dicen;
+      no diagnostica.
+    </div>
+  </aside>
+
+  <div class="readout" id="readout"><span style="color:var(--faint)">Cargando anatomía completa…</span></div>
+  <div class="slicedock" id="slicedock">
+    <div class="sd-t">Cortes del estudio en 3D <button id="sdClose" aria-label="cerrar">×</button></div>
+    <div class="sd-n" id="sdInfo"></div>
+    <input type="range" id="sdSlider" min="0" max="0" value="0" aria-label="Corte del estudio">
+    <div class="sd-n">Alineación anatómica aproximada · flechas ↑ ↓ también avanzan</div>
+    <div class="sd-informe"><pre id="sdReport" style="white-space:pre-wrap;font-family:var(--sans);font-size:10.5px;line-height:1.5;color:#374151;background:#F6F7F9;border-left:3px solid var(--accent);border-radius:6px;padding:7px 9px;margin:0"></pre></div>
+  </div>
+  <div class="lightbox" id="lightbox">
+    <img id="lbImg" alt="Imagen del estudio">
+    <div class="cap" id="lbCap"></div>
+    <div class="nav">
+      <button id="lbPrev">‹ anterior</button>
+      <button id="lbClose">cerrar (Esc)</button>
+      <button id="lbNext">siguiente ›</button>
+    </div>
+  </div>
+  <div class="loading" id="loading">descargando anatomía completa (60 MB, solo local)…</div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+
+const SYSTEMS = {
+  skeletal:      { es: 'Esqueleto',    color: '#E4DECF', on: true },
+  muscular:      { es: 'Músculos',     color: '#B0685F', on: false },
+  cardiac:       { es: 'Corazón',      color: '#A6453C', on: true },
+  arterial:      { es: 'Arterias',     color: '#A6403D', on: true },
+  venous:        { es: 'Venas',        color: '#5C6D96', on: true },
+  nervous:       { es: 'Nervios',      color: '#D9C48A', on: false },
+  respiratory:   { es: 'Respiratorio', color: '#C89BA5', on: true },
+  digestive:     { es: 'Digestivo',    color: '#C9A084', on: true },
+  urinary:       { es: 'Urinario',     color: '#C2955C', on: true },
+  reproductive:  { es: 'Reproductor',  color: '#C79AA8', on: false },
+  endocrine:     { es: 'Endocrino',    color: '#B78BC1', on: true },
+  lymphatic:     { es: 'Linfático',    color: '#9BB8A2', on: true },
+  sensory:       { es: 'Sensorial',    color: '#D9CBB8', on: false },
+  connective:    { es: 'Conectivo',    color: '#D8D2C8', on: false },
+  integumentary: { es: 'Silueta',      color: '#E7DDD6', on: true },
+};
+const ST_COLOR = {
+  hallazgo: '#2563EB', vigilancia: '#D97706', tratamiento: '#DC2626', resuelto: '#059669',
+};
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setClearColor(0xFAFAFB, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 40);
+const key = new THREE.DirectionalLight(0xfff4ec, 1.6); key.position.set(3, 4, 3);
+const rim = new THREE.DirectionalLight(0xdfe8ff, 0.7); rim.position.set(-4, 1, -3);
+scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0x8a8f9e, 0.9), new THREE.AmbientLight(0xffffff, 0.3));
+const root = new THREE.Group();
+scene.add(root);
+
+const manifest = await fetch('./anatomy-full.json').then((r) => r.json());
+$('loading').textContent = 'preparando 2.234 mallas…';
+await new Promise((r) => setTimeout(r, 30));
+const bin = await fetch('./anatomy-full.bin').then((r) => r.arrayBuffer());
+
+const meshes = [];
+const bySystem = {};
+const bbox = new THREE.Box3();
+
+for (const p of manifest.parts) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
+  g.computeBoundingSphere();
+  const sys = SYSTEMS[p.system] || { color: '#CCC', on: false };
+  const skin = p.system === 'integumentary';
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(sys.color),
+    roughness: skin ? 0.85 : 0.5, metalness: 0.02,
+    clearcoat: skin ? 0 : 0.35, clearcoatRoughness: 0.3,
+    transparent: skin, opacity: skin ? 0.06 : 1, depthWrite: !skin,
+  });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.userData = { part: p, baseColor: mat.color.clone(), finding: null };
+  mesh.visible = sys.on;
+  mesh.renderOrder = skin ? 2 : 0;
+  root.add(mesh); meshes.push(mesh);
+  (bySystem[p.system] ??= []).push(mesh);
+  if (!skin) bbox.expandByObject(mesh);
+}
+const center = bbox.getCenter(new THREE.Vector3());
+root.position.sub(center);
+const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
+
+/* ---------- cámara (idéntica gramática que heart.html) ---------- */
+const orbit = { az: 0.15, el: 0.02, dist: radius * 2.2, target: new THREE.Vector3() };
+const cur = { az: orbit.az, el: orbit.el, dist: orbit.dist, target: orbit.target.clone() };
+function applyCamera() {
+  const ce = Math.cos(cur.el);
+  camera.position.set(
+    cur.target.x + cur.dist * ce * Math.sin(cur.az),
+    cur.target.y + cur.dist * Math.sin(cur.el),
+    cur.target.z + cur.dist * ce * Math.cos(cur.az));
+  camera.lookAt(cur.target);
+}
+function dampCamera(dt) {
+  const k = 1 - Math.exp(-dt * 10);
+  cur.az += (orbit.az - cur.az) * k; cur.el += (orbit.el - cur.el) * k;
+  cur.dist += (orbit.dist - cur.dist) * k; cur.target.lerp(orbit.target, k);
+  applyCamera();
+}
+let dragging = false, panning = false, lastX = 0, lastY = 0, moved = false;
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; panning = e.button === 2 || e.shiftKey;
+  moved = false; lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointerup', (e) => {
+  dragging = false; panning = false; canvas.classList.remove('dragging');
+  canvas.releasePointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (dragging) {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    lastX = e.clientX; lastY = e.clientY;
+    if (panning) {
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+      const sc = cur.dist * 0.0016;
+      orbit.target.addScaledVector(right, -dx * sc).addScaledVector(up, dy * sc);
+    } else {
+      orbit.az -= dx * 0.005;
+      orbit.el = Math.max(-1.35, Math.min(1.35, orbit.el + dy * 0.005));
+    }
+  } else { hover(e); }
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  // salida más ágil que entrada; al alejarse, el objetivo regresa al cuerpo
+  const k = e.deltaY > 0 ? 0.0028 : 0.0016;
+  orbit.dist = Math.max(radius * 0.05, Math.min(radius * 4, orbit.dist * Math.exp(e.deltaY * k)));
+  if (e.deltaY > 0 && orbit.dist > radius * 0.7) orbit.target.lerp(new THREE.Vector3(0, 0, 0), 0.18);
+}, { passive: false });
+addEventListener('keydown', (e) => {
+  if (e.key === '0' || e.key === 'Home') {
+    orbit.target.set(0, 0, 0); orbit.dist = radius * 2.2; orbit.az = 0.15; orbit.el = 0.02;
+  }
+});
+canvas.addEventListener('dblclick', (e) => {
+  const hit = rayAt(e);
+  if (hit) { orbit.target.copy(hit.point); orbit.dist = Math.max(radius * 0.06, orbit.dist * 0.4); }
+  else { orbit.target.set(0, 0, 0); orbit.dist = radius * 2.2; }
+});
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function rayAt(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const targets = meshes.filter((m) => m.visible && m.userData.part.system !== 'integumentary');
+  const hits = raycaster.intersectObjects(targets, false);
+  return hits.length ? hits[0] : null;
+}
+let hovered = null;
+function hover(e) {
+  const hit = rayAt(e);
+  const m = hit ? hit.object : null;
+  if (m === hovered) return;
+  if (hovered) hovered.material.color.copy(displayColor(hovered));
+  hovered = m;
+  const el = $('readout');
+  if (m) {
+    m.material.color.copy(displayColor(m)).offsetHSL(0, 0.05, 0.12);
+    const p = m.userData.part;
+    const f = m.userData.finding;
+    el.innerHTML = `<span class="sw" style="background:${(SYSTEMS[p.system] || {}).color}"></span>` +
+      `<span>${p.name}</span>` +
+      (f ? `<span style="color:${ST_COLOR[f.status]}">● ${f.label}</span>` : '') +
+      `<span style="margin-left:auto;color:var(--faint);font-size:10px">${p.fma}</span>`;
+  } else {
+    el.innerHTML = '<span style="color:var(--faint)">Pasa el cursor sobre una estructura</span>';
+  }
+}
+
+/* ---------- Mi columna (RM): mallas segmentadas de la resonancia real ---------- */
+try {
+  const sj = await fetch('./media/micolumna/spine.json', { cache: 'no-store' })
+    .then((r) => r.ok ? r.json() : null);
+  if (sj?.parts?.length) {
+    const sbin = await fetch('./media/micolumna/spine.bin').then((r) => r.arrayBuffer());
+    SYSTEMS.micolumna = { es: 'Mi columna: hueso y discos', color: '#D97706', on: true };
+    SYSTEMS.micolumna_soft = { es: 'Mi columna: músculo y médula', color: '#B0685F', on: false };
+    const SOFT = new Set(['iliopsoas_left', 'iliopsoas_right', 'autochthon_left', 'autochthon_right', 'spinal_cord']);
+    for (const p of sj.parts) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sbin, p.positions, p.vertexCount * 3), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(sbin, p.normals, p.vertexCount * 3), 3, true));
+      g.setIndex(new THREE.BufferAttribute(new Uint32Array(sbin, p.indices, p.indexCount), 1));
+      g.computeBoundingSphere();
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(p.color), roughness: 0.55, metalness: 0.02,
+        clearcoat: 0.3, clearcoatRoughness: 0.3 });
+      const sys = SOFT.has(p.id) ? 'micolumna_soft' : 'micolumna';
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.userData = { part: { ...p, fma: 'RM-' + p.id, system: sys }, baseColor: mat.color.clone(), finding: null };
+      mesh.visible = sys === 'micolumna';
+      root.add(mesh); meshes.push(mesh);
+      (bySystem[sys] ??= []).push(mesh);
+    }
+  }
+} catch (e) { console.warn('mi columna no disponible', e); }
+
+/* ---------- sistemas UI ---------- */
+$('systems').innerHTML = Object.entries(SYSTEMS).map(([k, v]) =>
+  `<label class="tg"><input type="checkbox" data-sys="${k}" ${v.on ? 'checked' : ''}>
+   <span class="sw" style="background:${v.color}"></span>${v.es}
+   <span class="n" style="margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:10px">${(bySystem[k] || []).length}</span></label>`).join('');
+for (const input of document.querySelectorAll('[data-sys]')) {
+  input.addEventListener('change', () => {
+    for (const m of bySystem[input.dataset.sys] || []) m.visible = input.checked && !hiddenByCond(m);
+  });
+}
+$('skinT').addEventListener('input', (e) => {
+  for (const m of bySystem.integumentary || []) m.material.opacity = e.target.value / 100;
+});
+
+/* ---------- condición personal ---------- */
+let findings = [], onlyCond = false, condFocus = true;
+const flabels = [];
+const pulseMeshes = [];      // hallazgos de imagen: laten suavemente
+const reprGroup = new THREE.Group();   // representaciones intra-órgano (puntos, flechas)
+
+/* Color de presentación: con "resaltar condición", lo sano se desvanece y
+   los hallazgos conservan su color de estado saturado. */
+function displayColor(m) {
+  if (m.userData.finding) return m.userData.findingColor;
+  if (condFocus && findings.length && m.userData.part.system !== 'integumentary') {
+    return m.userData.baseColor.clone().lerp(new THREE.Color(0xEEEFF2), 0.8);
+  }
+  return m.userData.baseColor;
+}
+function applyPresentation() {
+  for (const m of meshes) m.material.color.copy(displayColor(m));
+}
+
+function hiddenByCond(m) { return onlyCond && !m.userData.finding; }
+
+function resolveTarget(t) {
+  if (!t) return [];
+  if (t.fma) return meshes.filter((m) => m.userData.part.fma === t.fma);
+  if (t.nameIncludes) {
+    const q = t.nameIncludes.toLowerCase();
+    return meshes.filter((m) => m.userData.part.name.toLowerCase().includes(q));
+  }
+  if (t.system) return bySystem[t.system] || [];
+  return [];
+}
+
+function focusFinding(f) {
+  const ms = resolveTarget(f.target);
+  if (!ms.length) return;
+  const c = new THREE.Vector3();
+  let structR = 0;
+  for (const m of ms) {
+    c.add(m.geometry.boundingSphere.center);
+    structR = Math.max(structR, m.geometry.boundingSphere.radius);
+  }
+  c.divideScalar(ms.length).sub(center);
+  orbit.target.copy(c);
+  // acercarse en proporción al tamaño real de la estructura (un disco pide más zoom que un pulmón)
+  orbit.dist = Math.min(radius * 0.6, Math.max(structR * 7, radius * 0.045));
+}
+
+async function loadCondition() {
+  let data = null, src = 'condicion.json';
+  try { data = await fetch('./condicion.json', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null); } catch {}
+  if (!data) {
+    try { data = await fetch('./condicion.example.json').then((r) => r.json()); src = 'condicion.example.json (EJEMPLO)'; } catch {}
+  }
+  if (!data) { $('condMeta').textContent = 'sin archivo de condición'; return; }
+  findings = data.findings || [];
+  // ¿tiene cortes montados? (index.json generado por la integración del estudio)
+  for (const f of findings) {
+    if (!f.slices) continue;
+    const cfgs = Array.isArray(f.slices) ? f.slices : [f.slices];
+    f.slicesArr = [];
+    for (const cfg of cfgs) {
+      try {
+        const idx = await fetch('./' + cfg.dir + '/index.json', { cache: 'no-store' })
+          .then((r) => r.ok ? r.json() : null);
+        if (idx?.files?.length) f.slicesArr.push({ cfg, files: idx.files });
+      } catch {}
+    }
+    f.slicesReady = f.slicesArr.length > 0;
+  }
+  $('condMeta').textContent = `${src} · ${data.updated || ''} · ${findings.length} hallazgos`;
+
+  // limpiar marcas previas
+  for (const m of meshes) { m.userData.finding = null; m.userData.findingColor = null; m.material.emissiveIntensity = 0; }
+  for (const L of flabels) L.el.remove();
+  flabels.length = 0;
+  pulseMeshes.length = 0;
+  for (const c of [...reprGroup.children]) { c.geometry?.dispose(); c.material?.dispose(); reprGroup.remove(c); }
+  if (!reprGroup.parent) root.add(reprGroup);
+
+  const list = $('findings');
+  list.innerHTML = '';
+  let lastGroup = null;
+  for (const f of findings) {
+    if (f.grupo && f.grupo !== lastGroup) {
+      lastGroup = f.grupo;
+      const gh = document.createElement('div');
+      gh.style.cssText = 'font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:0.12em;color:var(--faint);margin:12px 0 2px;';
+      gh.textContent = f.grupo;
+      list.appendChild(gh);
+    }
+    const ms = resolveTarget(f.target);
+    const col = ST_COLOR[f.status] || '#6B7280';
+    for (const m of ms) {
+      m.userData.finding = f;
+      m.userData.findingColor = new THREE.Color(col).lerp(m.userData.baseColor, 0.25);
+      m.material.color.copy(m.userData.findingColor);
+    }
+    // un sistema con hallazgos nunca debe arrancar oculto
+    for (const m of ms) {
+      if (!m.visible) {
+        const sys = m.userData.part.system;
+        for (const mm of bySystem[sys] || []) mm.visible = true;
+        const cb = document.querySelector(`[data-sys="${sys}"]`);
+        if (cb) cb.checked = true;
+      }
+    }
+    // pulso suave en hallazgos activos anclados a imagen
+    if (ms.length && (f.status === 'vigilancia' || f.status === 'tratamiento')) {
+      for (const m of ms) {
+        m.material.emissive = new THREE.Color(col);
+        pulseMeshes.push(m);
+      }
+    }
+
+    /* Representaciones intra-órgano: la imagen del informe, dibujada.
+       repr:"specks" = microcalcificaciones como puntos dispersos.
+       repr:"protrusion" = flecha posterior en el disco, dirección documentada. */
+    if (f.repr === 'specks' && ms.length) {
+      for (const m of ms) {
+        const pos = m.geometry.getAttribute('position');
+        const n = Math.min(46, pos.count);
+        const pts = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) {
+          const j = Math.floor((i / n) * pos.count);
+          // ligeramente hacia dentro del órgano
+          const cx = m.geometry.boundingSphere.center;
+          pts[i*3]   = pos.getX(j) * 0.86 + cx.x * 0.14;
+          pts[i*3+1] = pos.getY(j) * 0.86 + cx.y * 0.14;
+          pts[i*3+2] = pos.getZ(j) * 0.86 + cx.z * 0.14;
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+        const specks = new THREE.Points(g, new THREE.PointsMaterial({
+          color: 0xFFFFFF, size: 0.0016, transparent: true, opacity: 0.95, depthTest: false }));
+        specks.renderOrder = 3;
+        reprGroup.add(specks);
+      }
+    }
+    if (f.repr === 'protrusion' && ms.length) {
+      /* Morfología documentada, esculpida en la malla del disco:
+         - pérdida de altura: compresión vertical del disco
+         - protrusión CENTRAL POSTERIOR: abombamiento hacia -Z (posterior),
+           centrado en X, con caída gaussiana.
+         Esquemático y exagerado para visibilidad; la geometría real es la de la RM. */
+      for (const m of ms) {
+        const g = m.geometry;
+        const pos = g.getAttribute('position');
+        const c0 = g.boundingSphere.center;
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+          // compresión de altura (~14%)
+          pos.setY(i, c0.y + (y - c0.y) * 0.86);
+          // abombamiento posterior central
+          if (z < c0.z) {
+            const wx = Math.exp(-Math.pow((x - c0.x) / 0.013, 2));
+            const wz = Math.min(1, (c0.z - z) / 0.01);
+            pos.setZ(i, z - 0.0045 * wx * wz);
+          }
+        }
+        pos.needsUpdate = true;
+        g.computeVertexNormals();
+        g.computeBoundingSphere();
+      }
+    }
+
+    if (ms.length) {
+      const c = new THREE.Vector3();
+      for (const m of ms) c.add(m.geometry.boundingSphere.center);
+      c.divideScalar(ms.length).sub(center);
+      const el = document.createElement('div');
+      el.className = 'flabel';
+      el.innerHTML = `<i style="background:${col}"></i>${f.label}`;
+      $('flabels').appendChild(el);
+      flabels.push({ el, anchor: c, f });
+    }
+    const row = document.createElement('div');
+    row.className = 'finding';
+    row.innerHTML = `<div class="fl"><span class="dot" style="background:${col}"></span>${f.label}</div>` +
+      `<div class="fs">${f.source || ''}</div>` +
+      (f.note ? `<div class="fn">${f.note}</div>` : '') +
+      (ms.length || !f.target ? '' : `<div class="fn" style="color:var(--st-tratamiento)">estructura no resuelta: revisar target</div>`) +
+      (f.media?.length ? `<div class="thumbs">` +
+        f.media.slice(0, 8).map((m, i) => `<img src="${m}" loading="lazy" data-media="${f.id}" data-idx="${i}" alt="imagen ${i + 1}">`).join('') +
+        (f.media.length > 8 ? `<span style="font-size:10px;color:var(--faint);align-self:center;font-family:var(--mono)">+${f.media.length - 8} más</span>` : '') +
+        `</div>` : '') +
+      (f.mediaNote ? `<div class="fn">${f.mediaNote}</div>` : '') +
+      (f.informe ? `<details class="informe"><summary>Informe del especialista — texto literal</summary><pre>${f.informe}</pre></details>` : '') +
+      (f.slicesReady ? `<div class="fn" style="display:flex;gap:5px;flex-wrap:wrap">` +
+        f.slicesArr.map((st, si) =>
+          `<button data-slices="${f.id}" data-stack="${si}" style="font-family:var(--mono);font-size:10.5px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--accent)">Cortes 3D: ${st.cfg.label || (si + 1)}</button>`).join('') +
+        `</div>` : '');
+    row.addEventListener('click', (ev) => {
+      if (ev.target.tagName === 'IMG') { openLightbox(f, +ev.target.dataset.idx); return; }
+      if (ev.target.dataset?.slices) { openSlices(f, +(ev.target.dataset.stack || 0)); return; }
+      focusFinding(f);
+    });
+    list.appendChild(row);
+  }
+  applyPresentation();
+  $('tourCtr').textContent = '';
+}
+$('condFocus').addEventListener('change', (e) => {
+  condFocus = e.target.checked;
+  applyPresentation();
+});
+$('onlyCond').addEventListener('change', (e) => {
+  onlyCond = e.target.checked;
+  for (const [k, arr] of Object.entries(bySystem)) {
+    const sysOn = document.querySelector(`[data-sys="${k}"]`)?.checked ?? true;
+    for (const m of arr) m.visible = sysOn && !hiddenByCond(m);
+  }
+});
+
+const _lv = new THREE.Vector3();
+function updateFLabels() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const placed = [];
+  for (const L of flabels) {
+    _lv.copy(L.anchor);
+    _lv.project(camera);
+    if (_lv.z > 1 || Math.abs(_lv.x) > 1.05 || Math.abs(_lv.y) > 1.05) { L.el.style.opacity = '0'; L.sx = null; continue; }
+    L.sx = (_lv.x * 0.5 + 0.5) * w;
+    L.sy = (-_lv.y * 0.5 + 0.5) * h;
+  }
+  // anticolisión: orden por altura y desplazamiento vertical de los que chocan
+  const vis = flabels.filter((L) => L.sx !== null && L.sx !== undefined).sort((a, b) => a.sy - b.sy);
+  for (const L of vis) {
+    for (const P of placed) {
+      if (Math.abs(L.sx - P.sx) < 150 && L.sy - P.sy < 20) L.sy = P.sy + 20;
+    }
+    placed.push(L);
+    L.el.style.left = L.sx + 'px';
+    L.el.style.top = L.sy + 'px';
+    L.el.style.opacity = '0.95';
+  }
+}
+
+/* ============================================================
+   Cortes del estudio DICOM posicionados en el cuerpo.
+   Un plano texturizado en la ubicación anatómica del hallazgo;
+   el deslizador recorre los cortes y desplaza el plano por el
+   volumen real del barrido. Alineación aproximada, declarada.
+   ============================================================ */
+const texLoader = new THREE.TextureLoader();
+const sliceState = { f: null, plane: null, cache: new Map(), idx: 0 };
+
+function openSlices(f, stackIdx = 0) {
+  const st = f.slicesArr[stackIdx];
+  const cfg = st.cfg, files = st.files;
+  sliceState.f = f; sliceState.cfg = cfg; sliceState.files = files;
+  if (!sliceState.plane) {
+    const geo = new THREE.PlaneGeometry(1, 1);
+    const mat = new THREE.MeshBasicMaterial({
+      side: THREE.DoubleSide, transparent: true, opacity: 0.96, toneMapped: false });
+    sliceState.plane = new THREE.Mesh(geo, mat);
+    sliceState.plane.renderOrder = 4;
+    root.add(sliceState.plane);
+  }
+  const pl = sliceState.plane;
+  pl.visible = true;
+  // dimensiones reales del corte (mm -> m)
+  const h = (cfg.heightMm || 320) / 1000, d = (cfg.depthMm || 300) / 1000;
+  pl.scale.set(d, h, 1);
+  if ((cfg.orientation || 'sagittal') === 'sagittal') pl.rotation.set(0, Math.PI / 2, 0);
+  else if (cfg.orientation === 'axial') pl.rotation.set(Math.PI / 2, 0, 0);
+  else pl.rotation.set(0, 0, 0);
+
+  $('sdReport').textContent = f.informe || 'Sin informe textual asociado.';
+  $('sdSlider').max = files.length - 1;
+  $('sdSlider').value = Math.floor(files.length / 2);
+  $('slicedock').classList.add('on');
+  setSlice(Math.floor(files.length / 2));
+
+  // cámara: mirar el plano de frente, desde el lado izquierdo
+  const ms = resolveTarget(f.target);
+  if (ms.length) {
+    const c = ms[0].geometry.boundingSphere.center.clone().sub(center);
+    orbit.target.copy(c);
+    orbit.az = Math.PI / 2; orbit.el = 0;
+    orbit.dist = Math.max(h * 1.6, 0.35);
+  }
+}
+
+function setSlice(i) {
+  const f = sliceState.f;
+  if (!f) return;
+  const files = sliceState.files, cfg = sliceState.cfg;
+  sliceState.idx = Math.max(0, Math.min(files.length - 1, i));
+  const url = './' + cfg.dir + '/' + files[sliceState.idx];
+  if (!sliceState.cache.has(url)) {
+    const t = texLoader.load(url);
+    t.colorSpace = THREE.SRGBColorSpace;
+    sliceState.cache.set(url, t);
+  }
+  sliceState.plane.material.map = sliceState.cache.get(url);
+  sliceState.plane.material.needsUpdate = true;
+
+  // posición: el ancla anatómica, desplazada a lo largo del barrido
+  const ms = resolveTarget(f.target);
+  if (ms.length) {
+    const c = ms[0].geometry.boundingSphere.center.clone().sub(center);
+    const span = (cfg.spanMm || 140) / 1000;
+    const t01 = files.length > 1 ? sliceState.idx / (files.length - 1) : 0.5;
+    const off = (t01 - 0.5) * span;
+    if ((cfg.orientation || 'sagittal') === 'sagittal') sliceState.plane.position.set(c.x + off, c.y + (cfg.upMm || 0) / 1000, c.z);
+    else if (cfg.orientation === 'axial') sliceState.plane.position.set(c.x, c.y + off, c.z);
+    else sliceState.plane.position.set(c.x, c.y + (cfg.upMm || 0) / 1000, c.z + off);
+  }
+  $('sdInfo').textContent = `${f.label} — corte ${sliceState.idx + 1} de ${files.length}`;
+}
+
+$('sdSlider').addEventListener('input', (e) => setSlice(+e.target.value));
+$('sdClose').addEventListener('click', () => {
+  $('slicedock').classList.remove('on');
+  if (sliceState.plane) sliceState.plane.visible = false;
+  sliceState.f = null;
+});
+addEventListener('keydown', (e) => {
+  if (!sliceState.f) return;
+  if (e.key === 'ArrowUp') { e.preventDefault(); setSlice(sliceState.idx + 1); $('sdSlider').value = sliceState.idx; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); setSlice(sliceState.idx - 1); $('sdSlider').value = sliceState.idx; }
+});
+
+/* ---------- visor de imágenes del estudio ---------- */
+let lbFinding = null, lbIdx = 0;
+function openLightbox(f, idx) {
+  lbFinding = f; lbIdx = idx;
+  $('lbImg').src = f.media[idx];
+  $('lbCap').textContent = `${f.label} — ${f.source || ''} · imagen ${idx + 1} de ${f.media.length}`;
+  $('lightbox').classList.add('on');
+}
+function lbStep(d) {
+  if (!lbFinding) return;
+  lbIdx = ((lbIdx + d) % lbFinding.media.length + lbFinding.media.length) % lbFinding.media.length;
+  openLightbox(lbFinding, lbIdx);
+}
+$('lbClose').addEventListener('click', () => $('lightbox').classList.remove('on'));
+$('lbPrev').addEventListener('click', () => lbStep(-1));
+$('lbNext').addEventListener('click', () => lbStep(1));
+$('lightbox').addEventListener('click', (e) => { if (e.target === $('lightbox')) $('lightbox').classList.remove('on'); });
+$('lightbox').addEventListener('wheel', (e) => { e.preventDefault(); lbStep(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+addEventListener('keydown', (e) => {
+  if ($('lightbox').classList.contains('on')) {
+    if (e.key === 'Escape') $('lightbox').classList.remove('on');
+    if (e.key === 'ArrowRight') lbStep(1);
+    if (e.key === 'ArrowLeft') lbStep(-1);
+  }
+});
+
+/* ---------- recorrido guiado ---------- */
+let tourIdx = -1;
+function goTour(i) {
+  if (!findings.length) return;
+  tourIdx = ((i % findings.length) + findings.length) % findings.length;
+  const f = findings[tourIdx];
+  document.querySelectorAll('.finding').forEach((el, k) => el.classList.toggle('active', k === tourIdx));
+  document.querySelectorAll('.finding')[tourIdx]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  $('tourCtr').textContent = `${tourIdx + 1} / ${findings.length}`;
+  if (f.target) focusFinding(f);
+  const col = ST_COLOR[f.status] || '#6B7280';
+  $('readout').innerHTML = `<span class="sw" style="background:${col}"></span>` +
+    `<span><b>${f.label}</b></span>` +
+    `<span style="margin-left:auto;color:var(--faint);font-size:10px">${f.source || ''}</span>`;
+}
+$('tourStart').addEventListener('click', () => goTour(0));
+$('tourNext').addEventListener('click', () => goTour(tourIdx + 1));
+$('tourPrev').addEventListener('click', () => goTour(tourIdx - 1));
+addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' && tourIdx >= 0) goTour(tourIdx + 1);
+  if (e.key === 'ArrowLeft' && tourIdx >= 0) goTour(tourIdx - 1);
+});
+
+/* ---------- bucle ---------- */
+function fit() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+  applyCamera();
+}
+addEventListener('resize', fit);
+
+let frames = [], lastT = performance.now(), statT = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastT) / 1000);
+  frames.push(now - lastT); lastT = now;
+  if (frames.length > 240) frames.shift();
+  dampCamera(dt);
+  updateFLabels();
+  // latido suave de los hallazgos activos
+  const pulse = 0.14 + 0.12 * Math.sin(now * 0.0035);
+  for (const m of pulseMeshes) m.material.emissiveIntensity = pulse;
+  renderer.render(scene, camera);
+  if (now - statT > 700) {
+    statT = now;
+    const sorted = [...frames].sort((a, b) => a - b);
+    const p99 = sorted[Math.floor(sorted.length * 0.99)] || 1;
+    const mean = frames.reduce((a, b) => a + b, 0) / frames.length;
+    const info = renderer.info.render;
+    $('stat').innerHTML = `<b>${(1000 / mean).toFixed(0)}</b> fps · <b>${(1000 / p99).toFixed(0)}</b> 1% low<br>` +
+      `${(info.triangles / 1000).toFixed(0)}k tri · ${info.calls} draws`;
+  }
+}
+
+fit();
+applyCamera();
+await loadCondition();
+$('loading').remove();
+loop();
+</script>

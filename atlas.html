@@ -1,0 +1,770 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PulseNet — Atlas cardiaco: mapeo por segmentos</title>
+
+<style>
+  :root {
+    --navy-deep: #0A0D36;
+    --periwinkle: #BACFFF;
+    --periwinkle-hover: #A3BEFF;
+    --ink: #E4EBFC;
+    --ink-dim: #97A1CC;
+    --ink-muted: #626C9C;
+    --surface: #08080a;
+    --surface-2: #101230;
+    --surface-3: #171A3C;
+    --line: #262a55;
+    --lad: #2a78d6;
+    --rca: #d95f28;
+    --lcx: #1baf7a;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100dvh; background: var(--surface); color: var(--ink);
+    font-family: var(--sans); font-size: 13px; -webkit-font-smoothing: antialiased;
+  }
+
+  .shell { display: grid; grid-template-columns: 244px minmax(0,1fr) 340px; min-height: 100dvh; }
+  @media (max-width: 1180px) { .shell { grid-template-columns: 224px minmax(0,1fr); } }
+  @media (max-width: 820px)  { .shell { grid-template-columns: 1fr; } }
+
+  aside, .side {
+    background: var(--surface-2); border-right: 1px solid var(--line);
+    padding: 15px; display: flex; flex-direction: column; gap: 16px;
+    overflow-y: auto; max-height: 100dvh;
+  }
+  .side { border-right: 0; border-left: 1px solid var(--line); }
+  @media (max-width: 1180px) { .side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); max-height: none; } }
+  @media (max-width: 820px)  { aside { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); } }
+
+  h1 { font-size: 13px; margin: 0; letter-spacing: -0.01em; }
+  .sub { font-size: 11px; color: var(--ink-muted); margin-top: 3px; }
+
+  .gl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
+        color: var(--ink-muted); font-family: var(--mono); display: block; margin-bottom: 7px; }
+  .group { display: flex; flex-direction: column; }
+
+  .seg-ctl { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg-ctl button {
+    flex: 1; background: #191c3d; color: var(--ink-dim); border: 0; padding: 7px 6px;
+    font-family: var(--mono); font-size: 11px; cursor: pointer; transition: background 140ms ease, color 140ms ease;
+  }
+  .seg-ctl button + button { border-left: 1px solid var(--line); }
+  .seg-ctl button[aria-pressed="true"] { background: var(--periwinkle); color: var(--navy-deep); font-weight: 600; }
+  .seg-ctl button:focus-visible { outline: 2px solid var(--periwinkle); outline-offset: -2px; }
+
+  .legend { display: flex; flex-direction: column; gap: 6px; font-family: var(--mono); font-size: 11px; }
+  .lg { display: flex; align-items: center; gap: 8px; color: var(--ink-dim); }
+  .sw { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+  .lg .n { margin-left: auto; color: var(--ink-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+  .vlist { display: flex; flex-direction: column; gap: 2px; }
+  .vrow {
+    display: flex; align-items: center; gap: 7px; padding: 5px 7px; border-radius: 5px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-dim);
+    cursor: pointer; border: 1px solid transparent; text-align: left; background: none; width: 100%;
+  }
+  .vrow:hover { background: var(--surface-3); }
+  .vrow[aria-pressed="true"] { background: var(--surface-3); border-color: var(--periwinkle); color: var(--ink); }
+  .vrow:focus-visible { outline: 2px solid var(--periwinkle); outline-offset: 1px; }
+  .vrow .code { font-weight: 600; min-width: 46px; }
+  .vrow .risk { margin-left: auto; color: var(--ink-muted); font-size: 10px; }
+
+  /* ---------- escena ---------- */
+  .stage { display: flex; flex-direction: column; min-width: 0; }
+  .viewport {
+    flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px;
+    min-height: 380px;
+    background: radial-gradient(ellipse 70% 60% at 50% 42%, #14173a 0%, var(--surface) 78%);
+  }
+  #frame { position: relative; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+           background: var(--navy-deep); max-width: 100%; }
+  canvas { display: block; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  .hint {
+    position: absolute; top: 9px; left: 10px; font-family: var(--mono); font-size: 10px;
+    color: var(--ink-muted); pointer-events: none;
+  }
+  .readout {
+    position: absolute; bottom: 9px; left: 10px; right: 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink);
+    background: rgba(8,8,10,0.74); backdrop-filter: blur(6px);
+    padding: 7px 9px; border-radius: 5px; pointer-events: none;
+    border: 1px solid rgba(186,207,255,0.14); min-height: 28px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ---------- bullseye ---------- */
+  .bull { width: 100%; display: block; }
+  .bull .sector { cursor: pointer; transition: opacity 120ms ease; }
+  .bull .sector:focus { outline: none; }
+  .bull .sector:focus-visible > path { stroke: var(--periwinkle); stroke-width: 0.028; }
+  .bull text { font-family: var(--mono); font-size: 0.075px; pointer-events: none; user-select: none; }
+  .bull .ring-label { font-size: 0.06px; fill: var(--ink-muted); }
+
+  .detail { font-family: var(--mono); font-size: 11.5px; line-height: 1.7; }
+  .detail .k { color: var(--ink-muted); }
+  .detail .big { font-family: var(--sans); font-size: 14px; font-weight: 600; line-height: 1.3;
+                 margin-bottom: 2px; letter-spacing: -0.01em; }
+  .detail .row { display: flex; gap: 8px; }
+  .detail .row .k { min-width: 84px; flex: none; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 20px;
+          font-size: 10px; font-family: var(--mono); border: 1px solid var(--line); }
+
+  .cite { font-size: 10px; line-height: 1.5; color: var(--ink-muted);
+          border-left: 2px solid var(--line); padding-left: 9px; }
+  .warnbox { font-size: 10.5px; line-height: 1.5; color: #E8B34A;
+             border-left: 2px solid #E8B34A; padding-left: 9px; }
+
+  button.act {
+    font-family: var(--mono); font-size: 11px; background: #191c3d; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; cursor: pointer; width: 100%;
+  }
+  button.act:hover { background: #232750; }
+
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; }
+  th { text-align: left; padding: 5px 7px; color: var(--ink-muted); font-weight: 400;
+       border-bottom: 1px solid var(--line); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  td { padding: 4px 7px; border-bottom: 1px solid #1a1d3d; font-variant-numeric: tabular-nums; }
+  tr.hl td { background: var(--surface-3); }
+  .tablewrap { display: none; }
+  .tablewrap.on { display: block; }
+</style>
+
+<div class="shell">
+  <!-- ============ control ============ -->
+  <aside>
+    <div>
+      <h1>Atlas cardiaco — mapeo por segmentos</h1>
+      <div class="sub">PulseNet · iQ Technologies</div>
+    </div>
+
+    <div class="group">
+      <span class="gl">Modo de color</span>
+      <div class="seg-ctl" role="group" aria-label="Modo de color">
+        <button id="mTerr" aria-pressed="true">Territorio</button>
+        <button id="mAct" aria-pressed="false">Actividad</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="gl">Dominancia coronaria</span>
+      <div class="seg-ctl" role="group" aria-label="Dominancia coronaria">
+        <button id="dR" aria-pressed="true">Derecha</button>
+        <button id="dL" aria-pressed="false">Izquierda</button>
+        <button id="dC" aria-pressed="false">Codom.</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="gl" id="legendTitle">Leyenda</span>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="group">
+      <span class="gl">Coronarias — SCCT 18</span>
+      <div class="vlist" id="vlist"></div>
+    </div>
+
+    <div class="group">
+      <span class="gl">Datos</span>
+      <button class="act" id="exportBtn">Exportar diccionario JSON</button>
+    </div>
+  </aside>
+
+  <!-- ============ 3D ============ -->
+  <main class="stage">
+    <div class="viewport">
+      <div id="frame">
+        <canvas id="gl"></canvas>
+        <div class="hint">arrastra para rotar · rueda para acercar</div>
+        <div class="readout" id="readout"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ bullseye + detalle ============ -->
+  <div class="side">
+    <div class="group">
+      <span class="gl">Bullseye AHA — 17 segmentos</span>
+      <svg class="bull" id="bull" viewBox="-1.16 -1.16 2.32 2.32" role="group"
+           aria-label="Diagrama polar de 17 segmentos. Usa Tab para recorrer los segmentos."></svg>
+    </div>
+
+    <div class="group">
+      <span class="gl">Detalle</span>
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <div class="group">
+      <button class="act" id="tableBtn" aria-expanded="false">Ver como tabla</button>
+      <div class="tablewrap" id="tablewrap"></div>
+    </div>
+
+    <div class="cite" id="cite"></div>
+    <div class="warnbox">
+      La atribución de un segmento a una arteria es variable entre pacientes. Este mapa
+      codifica el caso típico: sirve para orientación y comunicación, no sustituye la
+      anatomía real vista en la angiografía o el CCTA del paciente.
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+import {
+  AHA_SEGMENTS, SCCT_SEGMENTS, VESSELS, LEVELS, WALLS,
+  PALETTE, SOURCES, territoryOf, byId,
+} from './clinical-model.js';
+import { buildSegmentGeometry, vesselCurve } from './lv-geometry.js';
+
+/* Datos de actividad de demostración. En producción esto viene del expediente
+   (Epic → Cases), no de una constante. Números deliberadamente irregulares. */
+const ACTIVITY = {
+  1: 0, 2: 3, 3: 5, 4: 1, 5: 0, 6: 2,
+  7: 4, 8: 9, 9: 7, 10: 2, 11: 1, 12: 0,
+  13: 6, 14: 12, 15: 3, 16: 1, 17: 2,
+};
+const ACT_MAX = Math.max(...Object.values(ACTIVITY));
+
+const state = {
+  mode: 'territory',      // 'territory' | 'activity'
+  dominance: 'right',     // 'right' | 'left' | 'codominant'
+  selectedSeg: null,      // id AHA
+  selectedVessel: null,   // code SCCT
+  atRisk: new Set(),
+};
+
+const $ = (id) => document.getElementById(id);
+
+/* ============================================================
+   Color
+   ============================================================ */
+
+function segColor(seg) {
+  if (state.mode === 'territory') {
+    return PALETTE.territory[territoryOf(seg, state.dominance)] || PALETTE.noDataDark;
+  }
+  const a = ACTIVITY[seg.id] ?? 0;
+  if (a <= 0) return PALETTE.noDataDark;
+  const ramp = PALETTE.densityDark;
+  const step = Math.min(ramp.length - 1, Math.round((a / ACT_MAX) * (ramp.length - 1)));
+  return ramp[step];
+}
+
+/** Luminancia relativa, para elegir tinta legible sobre cada relleno. */
+function luminance(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+const inkOn = (hex) => (luminance(hex) > 0.32 ? '#0A0D36' : '#E4EBFC');
+
+/* ============================================================
+   Escena 3D
+   ============================================================ */
+
+const frame = $('frame'), canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setClearColor(0x0A0D36, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 40);
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+keyLight.position.set(3, 4, 3);
+const fillLight = new THREE.DirectionalLight(0xBACFFF, 0.8);
+fillLight.position.set(-3, -1, -2);
+scene.add(keyLight, fillLight, new THREE.AmbientLight(0xffffff, 0.6));
+
+const root = new THREE.Group();
+scene.add(root);
+const myoGroup = new THREE.Group(), vesselGroup = new THREE.Group(), pickGroup = new THREE.Group();
+pickGroup.visible = false;
+root.add(myoGroup, vesselGroup, pickGroup);
+
+const PICK_MAT = new THREE.MeshBasicMaterial({ visible: false });
+const segMesh = new Map();      // id AHA  -> mesh
+const vesselMesh = new Map();   // code    -> mesh
+const pickList = [];
+
+// Teselación fija y modesta: el banco de pruebas (index.html) ya caracterizó el
+// costo; aquí no se mide, se usa.
+for (const seg of AHA_SEGMENTS) {
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.04 });
+  const mesh = new THREE.Mesh(buildSegmentGeometry(seg, 16, seg.level === 'apex' ? 64 : 24), mat);
+  mesh.userData = { kind: 'seg', seg };
+  myoGroup.add(mesh); segMesh.set(seg.id, mesh);
+
+  const pm = new THREE.Mesh(buildSegmentGeometry(seg, 3, seg.level === 'apex' ? 12 : 5), PICK_MAT);
+  pm.userData = { target: mesh };
+  pickGroup.add(pm); pickList.push(pm);
+}
+
+for (const v of SCCT_SEGMENTS) {
+  const curve = vesselCurve(v.code);
+  if (!curve) continue;
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.1 });
+  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 22, 0.027, 9, false), mat);
+  mesh.userData = { kind: 'vessel', vessel: v };
+  vesselGroup.add(mesh); vesselMesh.set(v.code, mesh);
+  pickList.push(mesh);
+}
+
+/* --- órbita mínima: sin dependencias extra --- */
+const orbit = { az: 0.62, el: 0.34, dist: 4.6, target: new THREE.Vector3(0, -0.30, 0) };
+let dragging = false, lastX = 0, lastY = 0, movedWhileDown = false;
+
+function updateCamera() {
+  const ce = Math.cos(orbit.el), se = Math.sin(orbit.el);
+  camera.position.set(
+    orbit.target.x + orbit.dist * ce * Math.sin(orbit.az),
+    orbit.target.y + orbit.dist * se,
+    orbit.target.z + orbit.dist * ce * Math.cos(orbit.az),
+  );
+  camera.lookAt(orbit.target);
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; movedWhileDown = false;
+  lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointerup', (e) => {
+  dragging = false; canvas.classList.remove('dragging');
+  canvas.releasePointerCapture(e.pointerId);
+  if (!movedWhileDown) pickAt(e);   // clic sin arrastre = selección
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (dragging) {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) movedWhileDown = true;
+    lastX = e.clientX; lastY = e.clientY;
+    orbit.az -= dx * 0.006;
+    orbit.el = Math.max(-1.25, Math.min(1.25, orbit.el + dy * 0.006));
+    updateCamera();
+  } else {
+    hoverAt(e);
+  }
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orbit.dist = Math.max(2.4, Math.min(9, orbit.dist + e.deltaY * 0.004));
+  updateCamera();
+}, { passive: false });
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+
+function hitAt(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(pickList, false);
+  if (!hits.length) return null;
+  const o = hits[0].object;
+  return o.userData.target ? o.userData.target.userData : o.userData;
+}
+
+let hoverId = null;
+function hoverAt(e) {
+  const d = hitAt(e);
+  const key = d ? (d.kind === 'seg' ? 's' + d.seg.id : 'v' + d.vessel.code) : null;
+  if (key === hoverId) return;
+  hoverId = key;
+  showReadout(d);
+}
+function pickAt(e) {
+  const d = hitAt(e);
+  if (!d) { clearSelection(); return; }
+  if (d.kind === 'seg') selectSegment(d.seg.id);
+  else selectVessel(d.vessel.code);
+}
+
+function fitAndSize() {
+  const vp = document.querySelector('.viewport').getBoundingClientRect();
+  const w = Math.max(260, Math.floor(vp.width - 32));
+  const h = Math.max(300, Math.floor(vp.height - 32));
+  frame.style.width = w + 'px'; frame.style.height = h + 'px';
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setSize(w, h, false);
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  updateCamera();
+}
+addEventListener('resize', fitAndSize);
+
+/* ============================================================
+   Bullseye 2D
+   ============================================================ */
+
+// Convención AHA: anterior arriba, septal a la izquierda, lateral a la derecha,
+// inferior abajo. Ángulos en grados de pantalla (0 = derecha, 90 = abajo).
+const RINGS = {
+  basal:  { r0: 0.735, r1: 1.0,   ids: [1, 2, 3, 4, 5, 6],   a0: 240, span: 60 },
+  mid:    { r0: 0.475, r1: 0.735, ids: [7, 8, 9, 10, 11, 12], a0: 240, span: 60 },
+  apical: { r0: 0.245, r1: 0.475, ids: [13, 14, 15, 16],      a0: 225, span: 90 },
+};
+const APEX_R = 0.245;
+
+const pol = (r, deg) => {
+  const a = (deg * Math.PI) / 180;
+  return [r * Math.cos(a), r * Math.sin(a)];
+};
+
+function annularPath(r0, r1, a0, a1) {
+  const g = 1.1, rg = 0.008;              // separación de 2 px equivalente
+  const b0 = a0 + g, b1 = a1 - g;
+  const [x0, y0] = pol(r1 - rg, b0), [x1, y1] = pol(r1 - rg, b1);
+  const [x2, y2] = pol(r0 + rg, b1), [x3, y3] = pol(r0 + rg, b0);
+  const large = b1 - b0 > 180 ? 1 : 0;
+  return `M${x0} ${y0}A${r1 - rg} ${r1 - rg} 0 ${large} 1 ${x1} ${y1}` +
+         `L${x2} ${y2}A${r0 + rg} ${r0 + rg} 0 ${large} 0 ${x3} ${y3}Z`;
+}
+
+function buildBullseye() {
+  const svg = $('bull');
+  svg.innerHTML = '';
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const mk = (seg, d, cx, cy) => {
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'sector');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.dataset.id = seg.id;
+
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    g.appendChild(path);
+
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', cx); t.setAttribute('y', cy);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.textContent = seg.id;
+    g.appendChild(t);
+
+    g.addEventListener('pointerenter', () => showReadout({ kind: 'seg', seg }));
+    g.addEventListener('click', () => selectSegment(seg.id));
+    g.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSegment(seg.id); }
+    });
+    g.addEventListener('focus', () => showReadout({ kind: 'seg', seg }));
+    svg.appendChild(g);
+    return g;
+  };
+
+  for (const ring of Object.values(RINGS)) {
+    ring.ids.forEach((id, i) => {
+      // Los segmentos avanzan en sentido ANTIHORARIO en pantalla: desde anterior
+      // (arriba) hacia el septo (izquierda). El ángulo decrece al subir el número.
+      const a0 = ring.a0 - i * ring.span;
+      const [cx, cy] = pol((ring.r0 + ring.r1) / 2, a0 + ring.span / 2);
+      mk(byId.get(id), annularPath(ring.r0, ring.r1, a0, a0 + ring.span), cx, cy);
+    });
+  }
+  // Ápex: disco central
+  const apex = byId.get(17);
+  const r = APEX_R - 0.008;
+  mk(apex, `M${-r} 0A${r} ${r} 0 1 1 ${r} 0A${r} ${r} 0 1 1 ${-r} 0Z`, 0, 0);
+
+  // Orientación anatómica
+  const labels = [['ant', 0, -1.09], ['sep', -1.09, 0], ['lat', 1.09, 0], ['inf', 0, 1.10]];
+  for (const [txt, x, y] of labels) {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('class', 'ring-label');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.textContent = txt;
+    svg.appendChild(t);
+  }
+}
+
+/* ============================================================
+   Pintado
+   ============================================================ */
+
+function paint() {
+  const anySel = state.selectedSeg !== null || state.selectedVessel !== null;
+
+  for (const seg of AHA_SEGMENTS) {
+    const base = segColor(seg);
+    const isSel = state.selectedSeg === seg.id;
+    const isRisk = state.atRisk.has(seg.id);
+    const dim = anySel && !isSel && !isRisk;
+
+    const c = new THREE.Color(base);
+    if (isSel) c.offsetHSL(0, 0.06, 0.16);
+    else if (isRisk) c.offsetHSL(0, 0.04, 0.08);
+    else if (dim) c.lerp(new THREE.Color(PALETTE.surfaceDark), 0.62);
+    segMesh.get(seg.id).material.color.copy(c);
+
+    const g = document.querySelector(`.sector[data-id="${seg.id}"]`);
+    if (g) {
+      const path = g.querySelector('path');
+      const fill = '#' + c.getHexString();
+      path.setAttribute('fill', fill);
+      path.setAttribute('stroke', isSel ? '#BACFFF' : (isRisk ? '#BACFFF' : 'none'));
+      path.setAttribute('stroke-width', isSel ? 0.024 : (isRisk ? 0.012 : 0));
+      g.querySelector('text').setAttribute('fill', inkOn(fill));
+      g.setAttribute('aria-label', ariaFor(seg));
+      g.setAttribute('aria-pressed', isSel ? 'true' : 'false');
+    }
+  }
+
+  for (const v of SCCT_SEGMENTS) {
+    const m = vesselMesh.get(v.code);
+    if (!m) continue;
+    const isSel = state.selectedVessel === v.code;
+    const c = new THREE.Color(PALETTE.territory[v.vessel] || '#8DA0E4');
+    if (isSel) c.offsetHSL(0, 0.1, 0.2);
+    else if (anySel) c.lerp(new THREE.Color(PALETTE.surfaceDark), 0.55);
+    m.material.color.copy(c);
+  }
+
+  for (const b of document.querySelectorAll('.vrow')) {
+    b.setAttribute('aria-pressed', b.dataset.code === state.selectedVessel ? 'true' : 'false');
+  }
+
+  renderLegend();
+  renderTable();
+}
+
+function ariaFor(seg) {
+  const t = territoryOf(seg, state.dominance);
+  const a = ACTIVITY[seg.id] ?? 0;
+  return `Segmento ${seg.id}, ${seg.es}. Territorio ${VESSELS[t]?.es || t}. ` +
+         `${a} ${a === 1 ? 'elemento' : 'elementos'} en el caso.`;
+}
+
+/* ============================================================
+   Selección
+   ============================================================ */
+
+function selectSegment(id) {
+  state.selectedSeg = state.selectedSeg === id ? null : id;
+  state.selectedVessel = null;
+  state.atRisk = new Set();
+  paint(); renderDetail();
+}
+
+function selectVessel(code) {
+  const v = SCCT_SEGMENTS.find((x) => x.code === code);
+  if (!v) return;
+  const same = state.selectedVessel === code;
+  state.selectedVessel = same ? null : code;
+  state.selectedSeg = null;
+  state.atRisk = same ? new Set() : new Set(v.atRisk);
+  paint(); renderDetail();
+}
+
+function clearSelection() {
+  state.selectedSeg = null; state.selectedVessel = null; state.atRisk = new Set();
+  paint(); renderDetail();
+}
+
+function showReadout(d) {
+  const el = $('readout');
+  if (!d) { el.innerHTML = '<span style="color:var(--ink-muted)">Pasa el cursor sobre un segmento o una coronaria</span>'; return; }
+  if (d.kind === 'seg') {
+    const t = territoryOf(d.seg, state.dominance);
+    const col = PALETTE.territory[t] || '#8DA0E4';
+    const a = ACTIVITY[d.seg.id] ?? 0;
+    el.innerHTML =
+      `<span class="sw" style="background:${col}"></span>` +
+      `<span>AHA ${d.seg.id} — ${d.seg.es}</span>` +
+      `<span style="margin-left:auto;color:var(--ink-dim);font-size:10px">${VESSELS[t]?.abbr || t} · ${a} elem.</span>`;
+  } else {
+    const v = d.vessel;
+    el.innerHTML =
+      `<span class="sw" style="background:${PALETTE.territory[v.vessel]}"></span>` +
+      `<span>${v.code} — ${v.es}</span>` +
+      `<span style="margin-left:auto;color:var(--ink-dim);font-size:10px">${v.atRisk.length} segmentos distales</span>`;
+  }
+}
+
+/* ============================================================
+   Paneles
+   ============================================================ */
+
+function renderLegend() {
+  const el = $('legend');
+  if (state.mode === 'territory') {
+    $('legendTitle').textContent = 'Territorio coronario';
+    const counts = {};
+    for (const s of AHA_SEGMENTS) {
+      const t = territoryOf(s, state.dominance);
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    el.innerHTML = Object.entries(counts).map(([t, n]) =>
+      `<div class="lg"><span class="sw" style="background:${PALETTE.territory[t]}"></span>` +
+      `${VESSELS[t]?.es || t}<span class="n">${n} seg.</span></div>`).join('');
+  } else {
+    $('legendTitle').textContent = 'Actividad en el caso';
+    const ramp = PALETTE.densityDark;
+    el.innerHTML =
+      `<div class="lg"><span class="sw" style="background:${PALETTE.noDataDark}"></span>sin actividad</div>` +
+      ramp.map((c, i) => {
+        const lo = Math.round((i / ramp.length) * ACT_MAX) + (i === 0 ? 1 : 0);
+        const hi = Math.round(((i + 1) / ramp.length) * ACT_MAX);
+        return `<div class="lg"><span class="sw" style="background:${c}"></span>${lo}–${hi} elementos</div>`;
+      }).join('') +
+      `<div class="lg" style="margin-top:4px;color:var(--ink-muted);font-size:10px">` +
+      `Volumen de documentación, no severidad.</div>`;
+  }
+}
+
+function renderVessels() {
+  $('vlist').innerHTML = SCCT_SEGMENTS.map((v) =>
+    `<button class="vrow" data-code="${v.code}" aria-pressed="false">
+       <span class="sw" style="background:${PALETTE.territory[v.vessel]}"></span>
+       <span class="code">${v.code}</span>
+       <span>${v.es}</span>
+       <span class="risk">${v.atRisk.length}</span>
+     </button>`).join('');
+  for (const b of document.querySelectorAll('.vrow')) {
+    b.addEventListener('click', () => selectVessel(b.dataset.code));
+  }
+}
+
+function renderDetail() {
+  const el = $('detail');
+
+  if (state.selectedVessel) {
+    const v = SCCT_SEGMENTS.find((x) => x.code === state.selectedVessel);
+    const segs = v.atRisk.map((id) => byId.get(id));
+    el.innerHTML = `
+      <div class="big">${v.es}</div>
+      <div class="row"><span class="k">SCCT</span><span>${v.num} · ${v.code}</span></div>
+      <div class="row"><span class="k">Vaso</span><span>${VESSELS[v.vessel].es}</span></div>
+      <div class="row"><span class="k">Inglés</span><span>${v.en}</span></div>
+      ${v.dominanceDependent ? '<div class="row"><span class="k">Nota</span><span>Depende de la dominancia</span></div>' : ''}
+      <div class="row" style="margin-top:7px"><span class="k">En riesgo</span><span>${segs.length} segmentos si se ocluye aquí</span></div>
+      <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">
+        ${segs.map((s) => `<span class="pill" style="border-color:${PALETTE.territory[territoryOf(s, state.dominance)]}">${s.id} ${s.es}</span>`).join('')}
+      </div>`;
+    $('cite').innerHTML = `Segmentación coronaria: ${SOURCES.L14.ref}`;
+    return;
+  }
+
+  if (state.selectedSeg) {
+    const s = byId.get(state.selectedSeg);
+    const t = territoryOf(s, state.dominance);
+    const a = ACTIVITY[s.id] ?? 0;
+    const feeders = SCCT_SEGMENTS.filter((v) => v.atRisk.includes(s.id));
+    el.innerHTML = `
+      <div class="big">${s.es}</div>
+      <div class="row"><span class="k">Código</span><span>${s.code}</span></div>
+      <div class="row"><span class="k">Inglés</span><span>${s.en}</span></div>
+      <div class="row"><span class="k">Nivel</span><span>${LEVELS[s.level].es}</span></div>
+      <div class="row"><span class="k">Pared</span><span>${WALLS[s.wall].es}</span></div>
+      <div class="row"><span class="k">Territorio</span>
+        <span><span class="sw" style="display:inline-block;background:${PALETTE.territory[t]};vertical-align:-1px"></span>
+        ${VESSELS[t]?.es || t}</span></div>
+      ${s.altLeft ? `<div class="row"><span class="k">Si dom. izq.</span><span>${VESSELS[s.altLeft].es}</span></div>` : ''}
+      <div class="row" style="margin-top:7px"><span class="k">En el caso</span><span>${a} ${a === 1 ? 'elemento' : 'elementos'}</span></div>
+      <div class="row"><span class="k">Comprometen</span><span>${feeders.length} segmentos coronarios</span></div>
+      <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">
+        ${feeders.map((v) => `<span class="pill" style="border-color:${PALETTE.territory[v.vessel]}">${v.code}</span>`).join('')}
+      </div>`;
+    $('cite').innerHTML = `Segmentación miocárdica: ${SOURCES.C02.ref}`;
+    return;
+  }
+
+  el.innerHTML = '<span style="color:var(--ink-muted)">Selecciona un segmento en el bullseye o en el modelo, o una coronaria en la lista.</span>';
+  $('cite').innerHTML = `${SOURCES.C02.ref}<br>${SOURCES.L14.ref}`;
+}
+
+/* La vista de tabla es la ruta accesible en paralelo al 3D, y es además el
+   canal de relevo que exige el aviso de contraste del verde en modo claro. */
+function renderTable() {
+  const wrap = $('tablewrap');
+  if (!wrap.classList.contains('on')) return;
+  wrap.innerHTML = `<table><thead><tr>
+      <th>#</th><th>Segmento</th><th>Nivel</th><th>Pared</th><th>Territorio</th><th>Elem.</th>
+    </tr></thead><tbody>${
+    AHA_SEGMENTS.map((s) => {
+      const t = territoryOf(s, state.dominance);
+      const hl = state.selectedSeg === s.id || state.atRisk.has(s.id);
+      return `<tr class="${hl ? 'hl' : ''}"><td>${s.id}</td><td>${s.es}</td>` +
+             `<td>${LEVELS[s.level].es}</td><td>${WALLS[s.wall].es}</td>` +
+             `<td>${VESSELS[t]?.abbr || t}</td><td>${ACTIVITY[s.id] ?? 0}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+/* ============================================================
+   Controles
+   ============================================================ */
+
+function setMode(m) {
+  state.mode = m;
+  $('mTerr').setAttribute('aria-pressed', m === 'territory');
+  $('mAct').setAttribute('aria-pressed', m === 'activity');
+  paint();
+}
+$('mTerr').onclick = () => setMode('territory');
+$('mAct').onclick = () => setMode('activity');
+
+function setDominance(d) {
+  state.dominance = d;
+  $('dR').setAttribute('aria-pressed', d === 'right');
+  $('dL').setAttribute('aria-pressed', d === 'left');
+  $('dC').setAttribute('aria-pressed', d === 'codominant');
+  paint(); renderDetail();
+}
+$('dR').onclick = () => setDominance('right');
+$('dL').onclick = () => setDominance('left');
+$('dC').onclick = () => setDominance('codominant');
+
+$('tableBtn').onclick = () => {
+  const w = $('tablewrap');
+  const on = w.classList.toggle('on');
+  $('tableBtn').setAttribute('aria-expanded', on);
+  $('tableBtn').textContent = on ? 'Ocultar tabla' : 'Ver como tabla';
+  renderTable();
+};
+
+$('exportBtn').onclick = () => {
+  const payload = {
+    generated: 'atlas.html',
+    sources: SOURCES,
+    dominance: state.dominance,
+    myocardium: AHA_SEGMENTS.map((s) => ({
+      ...s, territoryResolved: territoryOf(s, state.dominance),
+      feeders: SCCT_SEGMENTS.filter((v) => v.atRisk.includes(s.id)).map((v) => v.code),
+    })),
+    coronary: SCCT_SEGMENTS,
+    palette: PALETTE,
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'pulsenet-segment-dictionary.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+addEventListener('keydown', (e) => { if (e.key === 'Escape') clearSelection(); });
+
+/* ============================================================
+   Arranque
+   ============================================================ */
+
+buildBullseye();
+renderVessels();
+fitAndSize();
+paint();
+renderDetail();
+showReadout(null);
+
+(function loop() {
+  requestAnimationFrame(loop);
+  renderer.render(scene, camera);
+})();
+</script>

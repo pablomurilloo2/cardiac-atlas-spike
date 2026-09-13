@@ -1,0 +1,1426 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Corazón anatómico — PulseNet</title>
+
+<style>
+  :root {
+    --ink: #111827; --mut: #6B7280; --faint: #9CA3AF;
+    --line: #E5E7EB; --panel: rgba(255,255,255,0.94);
+    --accent: #2563EB; --accent-soft: #EFF4FF;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FAFAFB; color: var(--ink); font-family: var(--sans);
+         font-size: 13px; -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+  .stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  /* ---------- cabecera ---------- */
+  .hdr { position: absolute; top: 22px; left: 24px; pointer-events: none; }
+  .eyebrow { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+             letter-spacing: 0.14em; color: var(--faint); }
+  .hdr h1 { margin: 3px 0 2px; font-size: 19px; font-weight: 650; letter-spacing: -0.02em; }
+  .hdr .meta { font-size: 11.5px; color: var(--mut); }
+  .hdr .meta a { color: var(--mut); pointer-events: auto; }
+
+  .hint { position: absolute; top: 26px; right: 24px; font-family: var(--mono);
+          font-size: 10px; color: var(--faint); pointer-events: none; }
+
+  /* ---------- panel flotante ---------- */
+  .panel {
+    position: absolute; top: 92px; left: 24px; width: 252px;
+    max-height: calc(100dvh - 200px); overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.07);
+    padding: 6px 0;
+  }
+  .panel::-webkit-scrollbar { width: 0; }
+
+  details { border-bottom: 1px solid #F0F1F3; }
+  details:last-of-type { border-bottom: 0; }
+  summary {
+    list-style: none; cursor: pointer; user-select: none;
+    padding: 10px 16px; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; color: var(--ink);
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; margin-left: auto; color: var(--faint); font-weight: 400; }
+  details[open] summary::after { content: '−'; }
+  .sec { padding: 2px 16px 14px; display: flex; flex-direction: column; gap: 9px; }
+
+  .btns { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pbtn {
+    font-family: var(--mono); font-size: 10.5px; background: #fff; color: var(--mut);
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; cursor: pointer;
+    transition: all 130ms ease;
+  }
+  .pbtn:hover { border-color: #C7CBD1; color: var(--ink); }
+  .pbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .pbtn.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  /* switch */
+  .tg { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink);
+        cursor: pointer; user-select: none; }
+  .tg input { appearance: none; width: 30px; height: 18px; border-radius: 10px;
+              background: #E3E5E8; margin: 0; position: relative; cursor: pointer;
+              transition: background 150ms ease; flex: none; }
+  .tg input::after { content: ''; position: absolute; top: 2px; left: 2px;
+                     width: 14px; height: 14px; border-radius: 50%; background: #fff;
+                     box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: left 150ms ease; }
+  .tg input:checked { background: var(--accent); }
+  .tg input:checked::after { left: 14px; }
+  .tg .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .tg .n { margin-left: auto; color: var(--faint); font-family: var(--mono); font-size: 10px; }
+
+  input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
+  .slabel { font-size: 11px; color: var(--mut); display: flex; justify-content: space-between; }
+
+  .note { font-size: 10.5px; line-height: 1.5; color: var(--faint); }
+  .stat { font-family: var(--mono); font-size: 10.5px; line-height: 1.7; color: var(--mut); }
+  .stat b { color: var(--ink); font-weight: 600; }
+  .cite { font-size: 10px; line-height: 1.5; color: var(--faint); }
+
+  /* ---------- dock inferior: las dos interacciones héroe ---------- */
+  .dock {
+    position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
+    display: flex; gap: 22px; align-items: center;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 999px;
+    box-shadow: 0 8px 30px rgba(17,24,39,0.08);
+    padding: 10px 22px;
+  }
+  .dock .di { display: flex; flex-direction: column; gap: 3px; width: 170px; }
+  .dock label { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+                letter-spacing: 0.1em; color: var(--faint); }
+
+  /* ---------- lectura inferior izquierda ---------- */
+  .readout {
+    position: absolute; bottom: 20px; left: 24px; max-width: 460px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink);
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 6px 22px rgba(17,24,39,0.06);
+    padding: 8px 12px; min-height: 30px;
+    display: flex; align-items: center; gap: 8px; pointer-events: none;
+  }
+  .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  .alabel {
+    position: absolute; transform: translate(-50%, -130%);
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em;
+    color: #374151; background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(17,24,39,0.06);
+    padding: 1px 7px; border-radius: 9px; white-space: nowrap;
+    transition: opacity 200ms ease; will-change: left, top;
+  }
+  .alabel::after {
+    content: ''; position: absolute; left: 50%; top: 100%;
+    width: 4px; height: 4px; margin: 3px 0 0 -2px; border-radius: 50%;
+    background: #6B7280; opacity: 0.8;
+  }
+
+  .loading { position: absolute; inset: 0; display: flex; align-items: center;
+             justify-content: center; font-family: var(--mono); font-size: 12px;
+             color: var(--faint); background: #FAFAFB; z-index: 5; }
+
+  @media (max-width: 720px) {
+    .panel { left: 12px; right: 12px; width: auto; top: 84px; max-height: 46dvh; }
+    .dock { width: calc(100% - 24px); border-radius: 16px; }
+    .hint { display: none; }
+  }
+</style>
+
+<div class="stage">
+  <canvas id="gl"></canvas>
+  <div id="labels" style="position:absolute;inset:0;pointer-events:none;overflow:hidden"></div>
+
+  <header class="hdr">
+    <div class="eyebrow">Atlas interactivo</div>
+    <h1>Corazón anatómico</h1>
+    <div class="meta">130 piezas · BodyParts3D · <a href="./">PulseNet</a></div>
+  </header>
+  <div class="hint">arrastra: rotar · rueda: zoom · doble clic: enfocar · clic der.: panear</div>
+
+  <aside class="panel">
+    <details open>
+      <summary>Vista</summary>
+      <div class="sec">
+        <div class="btns">
+          <button class="pbtn on" data-vis="anatomic">Anatómico</button>
+          <button class="pbtn" data-vis="territory">Territorios</button>
+        </div>
+        <label class="tg"><input type="checkbox" id="flowOn" checked> Flujo sanguíneo</label>
+        <label class="tg"><input type="checkbox" id="beatOn" checked> Latido</label>
+        <label class="tg"><input type="checkbox" id="labelsOn"> Etiquetas anatómicas</label>
+        <label class="tg"><input type="checkbox" id="chambers"> Modo cámaras</label>
+      </div>
+    </details>
+
+    <details>
+      <summary>Proyecciones</summary>
+      <div class="sec">
+        <div class="btns" id="projs"></div>
+        <button class="pbtn" id="apicalBtn">Apical (eco)</button>
+        <div class="note">Ángulos de arco en C aproximados — pendiente validación cardiología.</div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Análisis del VI</summary>
+      <div class="sec">
+        <label class="tg"><input type="checkbox" id="ahaOn"> Segmentos AHA-17</label>
+        <label class="tg"><input type="checkbox" id="saxOn"> Corte eje corto</label>
+        <input type="range" id="saxT" min="0" max="100" value="45" disabled
+               aria-label="Nivel del corte de eje corto">
+      </div>
+    </details>
+
+    <details>
+      <summary>Procedimiento</summary>
+      <div class="sec">
+        <div class="btns">
+          <button class="pbtn on" data-mode="explore">Explorar</button>
+          <button class="pbtn" data-mode="lesion">Lesión</button>
+          <button class="pbtn" data-mode="measure">Medir</button>
+        </div>
+        <button class="pbtn" id="demoCase">Cargar hallazgos del informe</button>
+        <div id="lesionPanel" style="display:none">
+          <div class="stat" id="lesionInfo"></div>
+          <div class="btns" style="margin-top:7px">
+            <button class="pbtn" data-sev="50">&lt;50%</button>
+            <button class="pbtn" data-sev="70">70-99%</button>
+            <button class="pbtn" data-sev="100">Oclusión</button>
+          </div>
+          <div class="btns" style="margin-top:7px">
+            <button class="pbtn" id="bestProjBtn"></button>
+            <button class="pbtn" id="wireBtn">Ruta de guía</button>
+            <button class="pbtn" id="stentBtn">Stent</button>
+          </div>
+          <div class="note" style="margin-top:6px">Severidad según lo documentado. Simulación educativa: no planifica ni guía procedimientos reales.</div>
+        </div>
+        <button class="pbtn" id="snapBtn">Snapshot PNG</button>
+        <div class="note">Teclas 1 / 2 / 3 · Esc limpia.</div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Capas</summary>
+      <div class="sec">
+        <div id="groups"></div>
+        <div id="vessels"></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Render</summary>
+      <div class="sec">
+        <div class="stat" id="stat">cargando…</div>
+        <div class="cite">
+          BodyParts3D, © The Database Center for Life Science, CC BY 4.0.
+          Anatomía de referencia adulta — no representa a ningún paciente.
+        </div>
+      </div>
+    </details>
+  </aside>
+
+  <div class="dock">
+    <div class="di">
+      <label>Separar estructuras</label>
+      <input type="range" id="explode" min="0" max="100" value="0"
+             aria-label="Separación de las piezas del corazón">
+    </div>
+    <div class="di">
+      <label>Ver a través</label>
+      <input type="range" id="ghost" min="0" max="100" value="0"
+             aria-label="Transparencia del miocardio">
+    </div>
+  </div>
+
+  <div class="readout" id="readout"><span style="color:var(--faint)">Cargando geometría…</span></div>
+  <div class="loading" id="loading">descargando anatomía…</div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+import { PALETTE, SCCT_SEGMENTS, AHA_SEGMENTS } from './clinical-model.js';
+
+/* Grupos de color: el corazón en un neutro anatómico apagado; cada árbol coronario
+   con el color de identidad validado (LAD azul, RCA naranja, LCx verde). El corazón
+   NO usa la paleta categórica: no es una identidad a distinguir, es el fondo. */
+const VESSEL_OF_FMA = {
+  FMA3855: 'LM', FMA74912: 'LAD', FMA3860: 'LAD', FMA3892: 'LAD', FMA3868: 'LAD',
+  FMA3872: 'LAD', FMA3874: 'LAD', FMA3876: 'LAD',
+  FMA3895: 'LCx',
+  FMA3802: 'RCA', FMA3818: 'RCA', FMA3815: 'RCA', FMA3837: 'RCA',
+  FMA3840: 'RCA', FMA3847: 'RCA', FMA3848: 'RCA',
+};
+const HEART_COLOR = '#8A6E70';   // modo territorios: miocardio neutro
+const GREAT_COLOR = '#66708E';   // modo territorios: grandes vasos como contexto
+
+/* Modo anatómico: la convención de los atlas quirúrgicos — rojo = sangre
+   oxigenada, azul = desoxigenada. Tonos apagados, no viscerales. */
+const ANA = {
+  myoV: '#A6453C',       // ventrículos: rojo profundo
+  myoA: '#8E4038',       // aurículas: caoba más oscuro (como en los atlas)
+  cavity: '#B0524A',     // interior de cámaras
+  valve: '#E8DACC',      // valvas claras
+  fat: '#D9C49E',        // grasa epicárdica: crema, sigue los surcos
+  oxy: '#A34B45',        // arterias
+  deoxy: '#5C6D96',      // venas
+};
+const ATRIA_FMA = new Set(['FMA9531', 'FMA9457']);
+const DEOXY_FMA = new Set(['FMA8612', 'FMA50872', 'FMA50873', 'FMA4720', 'FMA10951']);
+const INFLOW_FMA = new Set(['FMA4720', 'FMA10951', 'FMA49911', 'FMA49913', 'FMA49914', 'FMA49916']);
+const VALVE_FMA = new Set(['FMA7243','FMA7239','FMA7242','FMA7238','FMA7240','FMA7249','FMA7247','FMA7250','FMA7253','FMA7254','FMA7252']);
+const CAVITY_FMA = new Set(['FMA9291','FMA9466','FMA11359','FMA9465']);
+let visualMode = 'anatomic';    // 'anatomic' | 'territory'
+
+function colorFor(p, vessel) {
+  if (visualMode === 'territory') {
+    return vessel ? PALETTE.territory[vessel]
+      : p.group === 'great' || p.group === 'cvein' ? GREAT_COLOR : HEART_COLOR;
+  }
+  if (p.group === 'cvein') return ANA.deoxy;
+  if (p.group === 'heart') {
+    if (VALVE_FMA.has(p.fma)) return ANA.valve;
+    if (CAVITY_FMA.has(p.fma)) return ANA.cavity;
+    return ATRIA_FMA.has(p.fma) ? ANA.myoA : ANA.myoV;
+  }
+  return DEOXY_FMA.has(p.fma) ? ANA.deoxy : ANA.oxy;
+}
+const $ = (id) => document.getElementById(id);
+
+/* Orientación del paciente, determinada empíricamente sobre el dataset:
+   aorta descendente en -Z (posterior), DA en +Z (anterior), cava superior en -X
+   (derecha del paciente). => anterior = +Z · izquierda = +X · cefálico = +Y. */
+
+const manifest = await fetch('./cardiac-subset.json').then((r) => r.json());
+const bin = await fetch('./cardiac-subset.bin').then((r) => r.arrayBuffer());
+$('loading').textContent = 'preparando anatomía…';
+
+/* ---------- escena ---------- */
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+renderer.setClearColor(0xF7F8FA, 1);   // blanco neutro de estudio
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.001, 10);
+
+const key = new THREE.DirectionalLight(0xfff4ec, 1.7); key.position.set(3, 4, 3);
+const rim = new THREE.DirectionalLight(0xdfe8ff, 0.7); rim.position.set(-4, 1, -3);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f9e, 0.9);
+scene.add(key, rim, hemi, new THREE.AmbientLight(0xffffff, 0.3));
+
+const root = new THREE.Group();
+const beat = new THREE.Group();      // late todo el conjunto sobre el centro del corazón
+beat.add(root);
+scene.add(beat);
+
+/* ---------- carga de mallas ---------- */
+const meshes = [];
+const groupSets = { heart: [], great: [], cvein: [], LAD: [], RCA: [], LCx: [], LM: [] };
+const bbox = new THREE.Box3();
+
+for (const p of manifest.parts) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(
+    new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(
+    new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
+
+  const vessel = p.group === 'coronary' ? (VESSEL_OF_FMA[p.fma] || 'LAD') : null;
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(colorFor(p, vessel)),
+    roughness: p.group === 'heart' ? 0.42 : 0.36,
+    metalness: 0.02,
+    clearcoat: p.group === 'heart' ? 0.55 : 0.5,   // brillo húmedo de tejido
+    clearcoatRoughness: 0.22,
+  });
+  g.computeBoundingSphere();   // wirePath y placeLesion lo leen directamente
+
+  /* Textura procedural de tejido: moteado orgánico + variación de rugosidad,
+     calculado en shader sobre la posición — sin archivos de textura. */
+  if (p.group === 'heart') {
+    /* Tejido nivel referencia: moteado fuerte, microvasculatura superficial
+       (ruido en crestas, líneas finas oscuras), grasa epicárdica cremosa donde
+       el atributo aFat lo marca (calculado contra las centerlines coronarias),
+       y rugosidad variable para el brillo húmedo irregular. */
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'attribute float aFat;\nvarying float vFat;\nvarying vec3 vTis;\n' +
+        shader.vertexShader.replace('#include <begin_vertex>',
+          '#include <begin_vertex>\nvTis = position;\nvFat = aFat;');
+      shader.fragmentShader = ('varying vec3 vTis;\nvarying float vFat;\n' +
+        'float th3(vec3 q){ return fract(sin(dot(q, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\n' +
+        'float tnoise(vec3 q){ vec3 i = floor(q); vec3 f = fract(q); f = f * f * (3.0 - 2.0 * f);\n' +
+        '  float a = mix(mix(th3(i), th3(i+vec3(1,0,0)), f.x), mix(th3(i+vec3(0,1,0)), th3(i+vec3(1,1,0)), f.x), f.y);\n' +
+        '  float b = mix(mix(th3(i+vec3(0,0,1)), th3(i+vec3(1,0,1)), f.x), mix(th3(i+vec3(0,1,1)), th3(i+vec3(1,1,1)), f.x), f.y);\n' +
+        '  return mix(a, b, f.z); }\n' +
+        shader.fragmentShader)
+        .replace('vec4 diffuseColor = vec4( diffuse, opacity );',
+          'float tn = 0.6 * tnoise(vTis * 240.0) + 0.4 * tnoise(vTis * 820.0);\n' +
+          'vec3 tdiff = diffuse * (0.82 + 0.34 * tn);\n' +
+          // parches amplios de variación cromática (más cálido / más oscuro)
+          'float tzone = tnoise(vTis * 46.0);\n' +
+          'tdiff = mix(tdiff * vec3(0.86, 0.80, 0.82), tdiff * vec3(1.10, 1.00, 0.94), tzone);\n' +
+          // microvasculatura: crestas finas oscuras
+          'float rid = 1.0 - abs(2.0 * tnoise(vTis * 340.0) - 1.0);\n' +
+          'float vein = smoothstep(0.86, 0.99, rid);\n' +
+          'tdiff = mix(tdiff, tdiff * vec3(0.52, 0.38, 0.40), vein * 0.55);\n' +
+          // grasa epicárdica siguiendo los surcos coronarios
+          'float fat = vFat * (0.5 + 0.5 * tnoise(vTis * 120.0));\n' +
+          'tdiff = mix(tdiff, vec3(0.851, 0.769, 0.620) * (0.9 + 0.2 * tn), fat);\n' +
+          'vec4 diffuseColor = vec4( tdiff, opacity );')
+        .replace('#include <roughnessmap_fragment>',
+          '#include <roughnessmap_fragment>\n' +
+          'roughnessFactor = clamp(roughnessFactor * (0.72 + 0.5 * tn) + vFat * 0.18, 0.05, 1.0);');
+    };
+    mat.customProgramCacheKey = () => 'tissue';
+  }
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.userData = { part: p, vessel, baseColor: mat.color.clone() };
+  root.add(mesh);
+  meshes.push(mesh);
+  (vessel ? groupSets[vessel]
+    : groupSets[p.group === 'great' ? 'great' : p.group === 'cvein' ? 'cvein' : 'heart']).push(mesh);
+  bbox.expandByObject(mesh);
+}
+
+/* Eje largo del VI, empírico: centroide de la cavidad del VI (FMA9466) menos el de
+   la cavidad de la aurícula izquierda (FMA9465) = dirección base -> ápex. */
+function centroidOf(fma) {
+  const acc = new THREE.Vector3(); let n = 0;
+  for (const m of meshes) {
+    if (m.userData.part.fma !== fma) continue;
+    const pos = m.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      acc.x += pos.getX(i); acc.y += pos.getY(i); acc.z += pos.getZ(i); n++;
+    }
+  }
+  return n ? acc.divideScalar(n) : null;
+}
+const lvCav = centroidOf('FMA9466'), laCav = centroidOf('FMA9465');
+const AXIS_LV = lvCav && laCav
+  ? lvCav.clone().sub(laCav).normalize()
+  : new THREE.Vector3(0.45, -0.65, 0.4).normalize();  // respaldo aproximado
+
+/* Centrar el conjunto en el origen: BodyParts3D posiciona en coordenadas de cuerpo. */
+const center = bbox.getCenter(new THREE.Vector3());
+root.position.sub(center);
+
+/* dirección de separación de cada pieza del corazón: desde el centro hacia fuera */
+for (const m of groupSets.heart) {
+  m.userData.explodeDir = m.geometry.boundingSphere.center.clone().sub(center);
+}
+let chamberMode = false;
+
+/* Grasa epicárdica: máscara por vértice según distancia a las centerlines
+   coronarias y venosas — la grasa real corre por esos mismos surcos. */
+(function buildFatMask() {
+  const paths = [];
+  for (const m of meshes) {
+    const part = m.userData.part;
+    if ((part.group === 'coronary' || part.group === 'cvein') && part.centerline) {
+      for (const a of part.centerline) paths.push(a);
+    }
+  }
+  if (!paths.length) return;
+  const P = new Float32Array(paths.length * 3);
+  paths.forEach((a, i) => { P[i * 3] = a[0]; P[i * 3 + 1] = a[1]; P[i * 3 + 2] = a[2]; });
+  const NEAR = 0.0035, FAR = 0.011;   // 3.5 mm de grasa plena, difuminada hasta 11 mm
+  for (const m of groupSets.heart) {
+    const fma = m.userData.part.fma;
+    if (VALVE_FMA.has(fma) || CAVITY_FMA.has(fma)) continue;
+    const pos = m.geometry.getAttribute('position');
+    const fat = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      let bd = Infinity;
+      for (let k = 0; k < P.length; k += 3) {
+        const dx = x - P[k], dy = y - P[k + 1], dz = z - P[k + 2];
+        const d = dx * dx + dy * dy + dz * dz;
+        if (d < bd) bd = d;
+      }
+      const dist = Math.sqrt(bd);
+      fat[i] = dist <= NEAR ? 1 : dist >= FAR ? 0 : 1 - (dist - NEAR) / (FAR - NEAR);
+    }
+    m.geometry.setAttribute('aFat', new THREE.BufferAttribute(fat, 1));
+  }
+})();
+const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
+
+/* ---------- proyecciones ----------
+   Convención de sala de hemodinamia, referida al PACIENTE (anterior=+Z, izq=+X):
+   LAO gira la cámara hacia la izquierda del paciente (az+), RAO hacia la derecha
+   (az-); craneal la eleva (el+), caudal la baja (el-).
+   APROXIMACIÓN GEOMÉTRICA pendiente de validación por cardiología: los ángulos
+   del arco en C se miden respecto al intensificador, aquí se aplican a la cámara. */
+const deg = (v) => (v * Math.PI) / 180;
+const PROJECTIONS = [
+  { id: 'ap',      label: 'AP',                 az: 0,        el: 0 },
+  { id: 'rao30',   label: 'RAO 30',             az: deg(-30), el: 0 },
+  { id: 'rao30ca', label: 'RAO 30 caudal 25',   az: deg(-30), el: deg(-25) },
+  { id: 'rao30cr', label: 'RAO 30 craneal 30',  az: deg(-30), el: deg(30) },
+  { id: 'lao45cr', label: 'LAO 45 craneal 30',  az: deg(45),  el: deg(30) },
+  { id: 'spider',  label: 'Spider (LAO 45 caudal 30)', az: deg(45), el: deg(-30) },
+  { id: 'lao45',   label: 'LAO 45',             az: deg(45),  el: 0 },
+  { id: 'apcr30',  label: 'AP craneal 30',      az: 0,        el: deg(30) },
+  { id: 'latizq',  label: 'Lateral izquierda',  az: deg(90),  el: 0 },
+];
+
+/* Proyección de despliegue óptima por segmento — mapeo estándar de referencia
+   (educativo; la proyección real depende de la anatomía del paciente). */
+function projFor(vessel, scct) {
+  if (scct === 'LM') return 'spider';
+  if (vessel === 'LAD') return scct === 'LAD-p' ? 'lao45cr' : 'rao30cr';
+  if (vessel === 'LCx') return 'rao30ca';
+  if (vessel === 'RCA') return scct === 'R-PDA' ? 'apcr30' : 'lao45';
+  return 'ap';
+}
+
+/* ---------- cámara: órbita amortiguada + zoom multiplicativo + paneo + foco ---------- */
+const orbit = { az: 0.55, el: 0.18, dist: radius * 3.1, target: new THREE.Vector3() };
+const cur = { az: orbit.az, el: orbit.el, dist: orbit.dist, target: orbit.target.clone() };
+
+function applyCamera() {
+  const ce = Math.cos(cur.el);
+  camera.position.set(
+    cur.target.x + cur.dist * ce * Math.sin(cur.az),
+    cur.target.y + cur.dist * Math.sin(cur.el),
+    cur.target.z + cur.dist * ce * Math.cos(cur.az));
+  camera.lookAt(cur.target);
+}
+function updateCamera() { /* el objetivo cambió; el bucle lo alcanza con amortiguación */ }
+function dampCamera(dt) {
+  const k = 1 - Math.exp(-dt * 10);
+  cur.az += (orbit.az - cur.az) * k;
+  cur.el += (orbit.el - cur.el) * k;
+  cur.dist += (orbit.dist - cur.dist) * k;
+  cur.target.lerp(orbit.target, k);
+  applyCamera();
+}
+let dragging = false, panning = false, lastX = 0, lastY = 0, moved = false;
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; panning = e.button === 2 || e.shiftKey;
+  moved = false; lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointerup', (e) => {
+  dragging = false; panning = false; canvas.classList.remove('dragging');
+  canvas.releasePointerCapture(e.pointerId);
+  if (!moved && e.button === 0) pickAt(e, true);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (dragging) {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    lastX = e.clientX; lastY = e.clientY;
+    if (panning) {
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+      const sc = cur.dist * 0.0016;
+      orbit.target.addScaledVector(right, -dx * sc).addScaledVector(up, dy * sc);
+    } else {
+      orbit.az -= dx * 0.006;
+      orbit.el = Math.max(-1.35, Math.min(1.35, orbit.el + dy * 0.006));
+    }
+  } else {
+    pickAt(e, false);
+  }
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orbit.dist = Math.max(radius * 0.12, Math.min(radius * 6,
+    orbit.dist * Math.exp(e.deltaY * 0.0016)));
+}, { passive: false });
+canvas.addEventListener('dblclick', (e) => {
+  const r = canvas.getBoundingClientRect();
+  ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(meshes.filter((m) => m.visible), false);
+  if (hits.length) {
+    orbit.target.copy(hits[0].point);
+    orbit.dist = Math.max(radius * 0.14, orbit.dist * 0.45);
+  } else {
+    orbit.target.set(0, 0, 0);
+    orbit.dist = radius * 3.1;
+  }
+});
+
+/* ---------- picking ---------- */
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let hovered = null;
+
+function pickAt(e, isClick) {
+  const r = canvas.getBoundingClientRect();
+  ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const visible = meshes.filter((m) => m.visible);
+  const t0 = performance.now();
+  const hits = raycaster.intersectObjects(visible, false);
+  lastPickMs = performance.now() - t0;
+
+  const hit = hits.length ? hits[0].object : null;
+  if (isClick) { onCanvasClick(hits.length ? hits[0] : null); return; }
+  if (hit !== hovered) {
+    if (hovered) hovered.material.color.copy(hovered.userData.baseColor);
+    hovered = hit;
+    if (hovered) hovered.material.color.copy(hovered.userData.baseColor).offsetHSL(0, 0.05, 0.15);
+    renderReadout(hit, isClick);
+  }
+}
+
+function renderReadout(mesh, pinned) {
+  const el = $('readout');
+  if (!mesh) {
+    el.innerHTML = '<span style="color:var(--ink-muted)">Pasa el cursor sobre una estructura</span>';
+    return;
+  }
+  const { part, vessel } = mesh.userData;
+  const scctInfo = part.scct ? SCCT_SEGMENTS.find((s) => s.code === part.scct) : null;
+  const col = '#' + mesh.userData.baseColor.getHexString();
+  el.innerHTML =
+    `<span class="sw" style="background:${col}"></span>` +
+    `<span>${part.name}</span>` +
+    `<span style="margin-left:auto;color:var(--ink-dim);font-size:10px">` +
+    `${part.fma}${part.scct ? ' · SCCT ' + part.scct : ''}` +
+    `${scctInfo ? ' · ' + scctInfo.atRisk.length + ' seg. AHA distales' : ''}</span>`;
+}
+
+/* ---------- vistas de eco y corte ---------- */
+/* Cámara apical: el transductor se apoya en el ápex y mira hacia la base. */
+function apicalView() {
+  const v = AXIS_LV.clone();
+  orbit.az = Math.atan2(v.x, v.z);
+  orbit.el = Math.asin(THREE.MathUtils.clamp(v.y, -1, 1));
+  orbit.dist = radius * 2.6;
+  updateCamera();
+}
+
+/* Eje corto: plano de corte perpendicular al eje largo del VI, deslizable
+   de base (0) a ápex (1). Recorta todo el conjunto. */
+renderer.localClippingEnabled = true;
+const clipPlane = new THREE.Plane();
+let clipOn = false;
+
+function setClip(t) {
+  // (el material del overlay AHA se recrea en paintWall con el clip actual)
+  // El plano vive en coordenadas de mundo; root está desplazado -center.
+  const base = laCav ? laCav.clone().sub(center) : new THREE.Vector3();
+  const apex = lvCav ? lvCav.clone().sub(center).addScaledVector(AXIS_LV, radius * 0.35) : new THREE.Vector3();
+  const pt = base.lerp(apex, t);
+  clipPlane.setFromNormalAndCoplanarPoint(AXIS_LV.clone().negate(), pt);
+  for (const m of meshes) {
+    m.material.clippingPlanes = clipOn ? [clipPlane] : null;
+    m.material.side = clipOn ? THREE.DoubleSide : THREE.FrontSide;
+    m.material.needsUpdate = true;
+  }
+}
+
+/* ---------- controles de visibilidad ---------- */
+const GROUPS = [
+  ['heart', 'Corazón (cámaras y válvulas)', HEART_COLOR],
+  ['great', 'Grandes vasos', GREAT_COLOR],
+  ['cvein', 'Venas cardiacas', '#5C6D96'],
+  ['LM', 'Tronco común', PALETTE.territory.LM],
+  ['LAD', 'Descendente anterior', PALETTE.territory.LAD],
+  ['LCx', 'Circunfleja', PALETTE.territory.LCx],
+  ['RCA', 'Coronaria derecha', PALETTE.territory.RCA],
+];
+/* Botones de proyección. Marcan cuál está activa; cualquier arrastre la apaga. */
+$('projs').innerHTML = PROJECTIONS.map((p) =>
+  `<button class="pbtn" data-proj="${p.id}">${p.label}</button>`).join('');
+let activeProj = null;
+function markProj(id) {
+  activeProj = id;
+  for (const b of document.querySelectorAll('[data-proj]'))
+    b.classList.toggle('on', b.dataset.proj === id);
+  $('apicalBtn').classList.toggle('on', id === 'apical');
+}
+for (const b of document.querySelectorAll('[data-proj]')) {
+  b.addEventListener('click', () => {
+    const p = PROJECTIONS.find((x) => x.id === b.dataset.proj);
+    orbit.az = p.az; orbit.el = p.el; orbit.dist = radius * 3.1;
+    updateCamera(); markProj(p.id);
+  });
+}
+$('apicalBtn').addEventListener('click', () => { apicalView(); markProj('apical'); });
+canvas.addEventListener('pointerdown', () => markProj(null));
+
+/* Corte de eje corto */
+$('saxOn').addEventListener('change', (e) => {
+  clipOn = e.target.checked;
+  $('saxT').disabled = !clipOn;
+  setClip($('saxT').value / 100);
+});
+$('saxT').addEventListener('input', (e) => setClip(e.target.value / 100));
+
+$('groups').innerHTML = GROUPS.map(([k, label, col]) =>
+  `<label class="tg"><input type="checkbox" data-g="${k}" checked>
+   <span class="sw" style="background:${col}"></span>${label}
+   <span class="n">${groupSets[k].length}</span></label>`).join('');
+for (const input of document.querySelectorAll('[data-g]')) {
+  input.addEventListener('change', () => {
+    for (const m of groupSets[input.dataset.g]) m.visible = input.checked;
+  });
+}
+
+/* Desglose por vaso en el panel, sólo informativo */
+$('vessels').innerHTML = ['LAD', 'LCx', 'RCA'].map((v) => {
+  const tris = groupSets[v].reduce((a, m) => a + m.userData.part.indexCount / 3, 0);
+  return `<div class="tg" style="cursor:default">
+    <span class="sw" style="background:${PALETTE.territory[v]}"></span>${v}
+    <span class="n">${groupSets[v].length} mallas · ${tris.toLocaleString('es')} tri</span></div>`;
+}).join('');
+
+/* ============================================================
+   Procedimiento — lesión, riesgo distal, guía, stent, medición
+   ============================================================ */
+const MM = 0.001;
+const markers = new THREE.Group();
+beat.add(markers);    // en coordenadas de mundo; late junto con la anatomía
+
+let mode = 'explore';
+let lesion = null;      // { point, mesh, vessel, scct, distOstium }
+let measurePts = [];
+let wireAnim = null;
+
+/* Ostium aproximado: vértice del tronco (LM / CD) más cercano al centroide de la
+   aorta ascendente. Suficiente para distancias y ruta de guía educativas. */
+const aoAsc = centroidOf('FMA3736');
+function ostiumOf(vessel) {
+  const trunkFma = vessel === 'RCA' ? 'FMA3802' : 'FMA3855';
+  let best = null, bd = Infinity;
+  for (const m of meshes) {
+    if (m.userData.part.fma !== trunkFma) continue;
+    const pos = m.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+      const d = v.distanceToSquared(aoAsc);
+      if (d < bd) { bd = d; best = v; }
+    }
+  }
+  return best ? best.sub(center) : new THREE.Vector3();  // a mundo
+}
+const OSTIUM = { L: ostiumOf('LAD'), R: ostiumOf('RCA') };
+
+/* Dirección local del vaso: eje dominante (iteración de potencia) de los vértices
+   de la malla golpeada en un radio de 6 mm alrededor del punto. */
+function localAxis(mesh, worldPoint) {
+  const local = worldPoint.clone().add(center);   // mundo -> coords de malla
+  const pos = mesh.geometry.getAttribute('position');
+  const pts = [];
+  const R2 = (6 * MM) ** 2;   // radio de muestreo: 6 mm (el modelo está en metros)
+  for (let i = 0; i < pos.count; i++) {
+    const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+    if (v.distanceToSquared(local) < R2) pts.push(v);
+  }
+  if (pts.length < 8) return new THREE.Vector3(0, 1, 0);
+  const c = pts.reduce((a, v) => a.add(v), new THREE.Vector3()).divideScalar(pts.length);
+  // covarianza 3x3 + iteración de potencia
+  let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+  for (const v of pts) {
+    const d = v.clone().sub(c);
+    xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
+    yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
+  }
+  let e = new THREE.Vector3(1, 1, 1).normalize();
+  for (let k = 0; k < 24; k++) {
+    e.set(xx * e.x + xy * e.y + xz * e.z,
+          xy * e.x + yy * e.y + yz * e.z,
+          xz * e.x + yz * e.y + zz * e.z).normalize();
+  }
+  return e;
+}
+
+/* Pinta toda la escena según el modo visual y la lesión activa. */
+function tintScene() {
+  const dim = new THREE.Color(0xE9EBEF);   // desvanecer hacia el blanco
+  for (const m of meshes) {
+    m.userData.baseColor.set(colorFor(m.userData.part, m.userData.vessel));
+    const c = m.userData.baseColor.clone();
+    if (lesion) {
+      const treeSet = new Set(groupSets[lesion.vessel]);
+      if (m.userData.part.group !== 'coronary') c.lerp(dim, 0.45);
+      else if (!treeSet.has(m)) c.lerp(dim, 0.6);
+      else {
+        const cRel = m.geometry.boundingSphere.center.clone().sub(center);
+        const ost = lesion.vessel === 'RCA' ? OSTIUM.R : OSTIUM.L;
+        const distal = cRel.distanceTo(ost) > lesion.point.distanceTo(ost);
+        c.offsetHSL(0, distal ? 0.08 : 0, distal ? 0.12 : -0.08);
+      }
+    }
+    m.material.color.copy(c);
+  }
+}
+
+function clearMarkers() {
+  for (const c of [...markers.children]) {
+    c.geometry?.dispose(); c.material?.dispose(); markers.remove(c);
+  }
+  lesion = null; measurePts = []; wireAnim = null;
+  flowFactor.clear();
+  $('lesionPanel').style.display = 'none';
+  tintScene();
+  if (ahaOn) paintWall();
+  renderReadout(null);
+}
+
+function setMode(m) {
+  mode = m;
+  for (const b of document.querySelectorAll('[data-mode]'))
+    b.classList.toggle('on', b.dataset.mode === m);
+}
+for (const b of document.querySelectorAll('[data-mode]'))
+  b.addEventListener('click', () => setMode(b.dataset.mode));
+addEventListener('keydown', (e) => {
+  if (e.key === '1') setMode('explore');
+  if (e.key === '2') setMode('lesion');
+  if (e.key === '3') setMode('measure');
+  if (e.key === 'Escape') clearMarkers();
+});
+
+function onCanvasClick(hit) {
+  if (mode === 'lesion') { if (hit) placeLesion(hit); return; }
+  if (mode === 'measure') { if (hit) addMeasurePoint(hit.point); return; }
+  if (hit && ahaOn && hit.object === wallMesh) {
+    const seg = ahaVertexSeg
+      ? (() => { const p = hit.point.clone().add(center); return ahaOf(p); })()
+      : 0;
+    if (seg) {
+      const s = AHA_SEGMENTS[seg - 1];
+      const col = PALETTE.territory[s.territory] || HEART_COLOR;
+      $('readout').innerHTML =
+        `<span class="sw" style="background:${col}"></span>` +
+        `<span>AHA ${s.id} — ${s.es}</span>` +
+        `<span style="margin-left:auto;color:var(--ink-dim);font-size:10px">` +
+        `territorio ${s.territory} · aproximación geométrica</span>`;
+      return;
+    }
+  }
+  if (hit) renderReadout(hit.object, true);
+}
+
+/* --- P1: ¿dónde está la lesión? · P2: ¿qué me juego distal? --- */
+function placeLesion(hit) {
+  clearMarkers();
+  const mesh = hit.object;
+  const { part, vessel } = mesh.userData;
+  if (!vessel) { renderReadout(mesh, true); return; }  // sólo sobre coronarias
+
+  const ost = vessel === 'RCA' ? OSTIUM.R : OSTIUM.L;
+  const distOstium = hit.point.distanceTo(ost) / MM;
+
+  // anillo en el punto, orientado al eje local del vaso
+  const axis = localAxis(mesh, hit.point);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(2.4 * MM, 0.7 * MM, 10, 28),
+    new THREE.MeshStandardMaterial({ color: 0xE8B34A, roughness: 0.35 }));
+  ring.position.copy(hit.point);
+  ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+  markers.add(ring);
+
+  const scct = part.scct;
+  const scctInfo = scct ? SCCT_SEGMENTS.find((s) => s.code === scct) : null;
+  lesion = { point: hit.point.clone(), mesh, vessel, scct, axis, distOstium };
+  tintScene();
+
+  if (ahaOn) paintWall();
+  $('lesionPanel').style.display = '';
+  $('lesionInfo').innerHTML =
+    `<b>${part.name}</b><br>` +
+    `${part.fma}${scct ? ' · SCCT ' + scct : ''}<br>` +
+    `distancia al ostium ~<b>${distOstium.toFixed(0)} mm</b>` +
+    (scctInfo ? `<br>territorio distal: <b>${scctInfo.atRisk.length}</b> segmentos AHA ` +
+      `(${scctInfo.atRisk.join(', ')})` : '');
+
+  /* P3: ¿qué proyección la despliega mejor? */
+  const pid = projFor(vessel, scct);
+  const proj = PROJECTIONS.find((p) => p.id === pid);
+  $('bestProjBtn').textContent = `Ver en ${proj.label}`;
+  $('bestProjBtn').onclick = () => {
+    orbit.az = proj.az; orbit.el = proj.el; orbit.dist = radius * 3.1;
+    updateCamera(); markProj(pid);
+  };
+}
+
+/* --- P5: ¿cómo llego? Ruta sobre centerlines reales encadenadas por grafo --- */
+const clWorld = (m) => (m.userData.part.centerline || [])
+  .map((a) => new THREE.Vector3(a[0], a[1], a[2]).sub(center));
+
+/* Encadena polilíneas manteniendo continuidad: invierte cada tramo si su final
+   queda más cerca del extremo actual que su inicio. */
+function chain(polys, seed) {
+  const out = seed ? [seed.clone()] : [];
+  for (const poly of polys) {
+    if (!poly.length) continue;
+    const cur = out[out.length - 1];
+    const p = cur && poly[poly.length - 1].distanceTo(cur) < poly[0].distanceTo(cur)
+      ? [...poly].reverse() : poly;
+    out.push(...p);
+  }
+  return out;
+}
+
+/* Grafo de adyacencia por árbol: dos mallas conectan si los extremos de sus
+   centerlines quedan a < 5 mm. BFS del tronco a la malla de la lesión. */
+function treePathTo(mesh) {
+  const vessel = mesh.userData.vessel;
+  const nodes = (vessel === 'RCA' ? groupSets.RCA
+    : [...groupSets.LM, ...groupSets.LAD, ...groupSets.LCx])
+    .filter((m) => clWorld(m).length);
+  const ends = nodes.map((m) => { const c = clWorld(m); return [c[0], c[c.length - 1]]; });
+  const near = (a, b) => Math.min(
+    a[0].distanceTo(b[0]), a[0].distanceTo(b[1]),
+    a[1].distanceTo(b[0]), a[1].distanceTo(b[1])) < 5 * MM;
+
+  const ost = vessel === 'RCA' ? OSTIUM.R : OSTIUM.L;
+  let start = 0, bd = Infinity;
+  nodes.forEach((m, i) => {
+    const d = Math.min(ends[i][0].distanceTo(ost), ends[i][1].distanceTo(ost));
+    if (d < bd) { bd = d; start = i; }
+  });
+  const target = nodes.indexOf(mesh);
+  if (target < 0) return null;
+
+  const prev = new Array(nodes.length).fill(-1);
+  const seen = new Set([start]);
+  const q = [start];
+  while (q.length) {
+    const i = q.shift();
+    if (i === target) break;
+    for (let j = 0; j < nodes.length; j++) {
+      if (seen.has(j) || !near(ends[i], ends[j])) continue;
+      seen.add(j); prev[j] = i; q.push(j);
+    }
+  }
+  if (!seen.has(target)) return null;
+  const order = [];
+  for (let i = target; i !== -1; i = prev[i]) order.unshift(i);
+  return order.map((i) => clWorld(nodes[i]));
+}
+
+function wirePath() {
+  if (!lesion) return null;
+  const ost = lesion.vessel === 'RCA' ? OSTIUM.R : OSTIUM.L;
+
+  // aorta por centerlines: descendente -> cayado -> ascendente
+  const aorta = ['FMA3784', 'FMA3768', 'FMA3736'].flatMap((fma) =>
+    meshes.filter((m) => m.userData.part.fma === fma).map(clWorld));
+  let pts = chain(aorta);
+  pts.push(ost);
+
+  // árbol coronario por BFS; respaldo al método de centroides si el grafo no llega
+  const treePolys = treePathTo(lesion.mesh);
+  if (treePolys) {
+    pts = pts.concat(chain(treePolys, pts[pts.length - 1]).slice(1));
+  } else {
+    const fallback = groupSets[lesion.vessel]
+      .map((m) => m.geometry.boundingSphere.center.clone().sub(center))
+      .filter((c) => c.distanceTo(ost) < lesion.point.distanceTo(ost))
+      .sort((a, b) => a.distanceTo(ost) - b.distanceTo(ost));
+    pts.push(...fallback);
+  }
+
+  // recortar en el punto más cercano a la lesión y terminar exactamente ahí
+  let cut = pts.length - 1, cd = Infinity;
+  pts.forEach((p, i) => {
+    const d = p.distanceTo(lesion.point);
+    if (d < cd) { cd = d; cut = i; }
+  });
+  pts = pts.slice(0, cut + 1);
+  pts.push(lesion.point);
+  return new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.3);
+}
+
+$('wireBtn').onclick = () => {
+  if (!lesion) return;
+  const curve = wirePath();
+  if (!curve) return;
+  const tube = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, 120, 0.45 * MM, 6, false),
+    new THREE.MeshStandardMaterial({ color: 0xD3DAEE, roughness: 0.3 }));
+  tube.geometry.setDrawRange(0, 0);   // se revela con la animación
+  markers.add(tube);
+  const tip = new THREE.Mesh(
+    new THREE.SphereGeometry(1.3 * MM, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0xBACFFF, roughness: 0.2 }));
+  markers.add(tip);
+  wireAnim = { curve, tube, tip, t: 0, start: performance.now() };
+};
+
+/* --- despliegue de stent en el punto marcado --- */
+$('stentBtn').onclick = () => {
+  if (!lesion) return;
+  const stent = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.9 * MM, 1.9 * MM, 16 * MM, 14, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: 0xC8CEDC, roughness: 0.25, metalness: 0.6,
+      wireframe: true,
+    }));
+  stent.position.copy(lesion.point);
+  stent.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), lesion.axis);
+  markers.add(stent);
+};
+
+for (const b2 of document.querySelectorAll('[data-sev]'))
+  b2.addEventListener('click', () => setSeverity(b2.dataset.sev));
+
+for (const b2 of document.querySelectorAll('[data-vis]')) {
+  b2.addEventListener('click', () => {
+    visualMode = b2.dataset.vis;
+    for (const x of document.querySelectorAll('[data-vis]'))
+      x.classList.toggle('on', x.dataset.vis === visualMode);
+    tintScene();
+  });
+}
+$('flowOn').addEventListener('change', (e) => { flowOn = e.target.checked; });
+
+/* Transparencia, separación y modo cámaras comparten esta rutina: un solo
+   sitio decide opacidad y posición de cada pieza del corazón. */
+function applyHeartPresentation() {
+  const t = $('ghost').value / 100;
+  const ex = $('explode').value / 100;
+  for (const m of groupSets.heart) {
+    const fma = m.userData.part.fma;
+    const isValve = VALVE_FMA.has(fma), isCavity = CAVITY_FMA.has(fma);
+    if (m.userData.explodeDir) m.position.copy(m.userData.explodeDir).multiplyScalar(ex * 1.6);
+    const wasT = m.material.transparent;
+    if (chamberMode && !isValve && !isCavity) {
+      m.material.transparent = true; m.material.opacity = 0.13; m.material.depthWrite = false;
+    } else if (!isValve && !isCavity) {
+      m.material.transparent = t > 0.01; m.material.opacity = 1 - t * 0.85;
+      m.material.depthWrite = t < 0.4;
+    } else {
+      m.material.transparent = false; m.material.opacity = 1; m.material.depthWrite = true;
+    }
+    // cambiar 'transparent' en un material ya compilado exige recompilar
+    if (m.material.transparent !== wasT) m.material.needsUpdate = true;
+  }
+}
+$('ghost').addEventListener('input', applyHeartPresentation);
+$('explode').addEventListener('input', applyHeartPresentation);
+$('chambers').addEventListener('change', (e) => {
+  chamberMode = e.target.checked;
+  applyHeartPresentation();
+});
+$('beatOn').addEventListener('change', (e) => { beatOn = e.target.checked; });
+
+/* Caso de ejemplo: hallazgos como los traería un informe de cateterismo,
+   codificados por segmento SCCT. Ficticios — el "símil del paciente". */
+const DEMO_FINDINGS = [
+  { scct: 'LAD-p', severity: '70', note: 'estenosis severa proximal' },
+  { scct: 'RCA-m', severity: '50', note: 'placa no obstructiva' },
+];
+$('demoCase').addEventListener('click', () => {
+  clearMarkers();
+  // marca la primera lesión de forma interactiva completa; las demás como anillos
+  let first = true;
+  for (const f of DEMO_FINDINGS) {
+    const mesh = meshes.find((m) => m.userData.part.scct === f.scct);
+    if (!mesh) continue;
+    const mid = mesh.geometry.boundingSphere.center.clone().sub(center);
+    if (first) {
+      placeLesion({ object: mesh, point: mid });
+      setSeverity(f.severity);
+      first = false;
+    } else {
+      const sev = SEVERITIES[f.severity];
+      const axis = localAxis(mesh, mid);
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(2.4 * MM, 0.7 * MM, 10, 28),
+        new THREE.MeshStandardMaterial({ color: sev.color, roughness: 0.35 }));
+      ring.position.copy(mid);
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+      markers.add(ring);
+      const ost2 = mesh.userData.vessel === 'RCA' ? OSTIUM.R : OSTIUM.L;
+      for (const m of groupSets[mesh.userData.vessel]) {
+        const cRel = m.geometry.boundingSphere.center.clone().sub(center);
+        if (cRel.distanceTo(ost2) >= mid.distanceTo(ost2) * 0.98)
+          flowFactor.set(m.userData.part.id, sev.factor);
+      }
+    }
+  }
+  $('readout').innerHTML =
+    '<span class="sw" style="background:#E07030"></span>' +
+    '<span>Caso de ejemplo: ' + DEMO_FINDINGS.map((f) => f.scct + ' ' + SEVERITIES[f.severity].label).join(' · ') + '</span>' +
+    '<span style="margin-left:auto;color:var(--ink-muted);font-size:10px">datos ficticios</span>';
+});
+
+/* --- P4: ¿cuánto mide? Medición punto a punto en mm --- */
+function addMeasurePoint(p) {
+  const dot = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1 * MM, 10, 10),
+    new THREE.MeshStandardMaterial({ color: 0xBACFFF }));
+  dot.position.copy(p);
+  markers.add(dot);
+  measurePts.push(p.clone());
+  if (measurePts.length === 2) {
+    const [a, b] = measurePts;
+    const line = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, b]), 1, 0.35 * MM, 6),
+      new THREE.MeshStandardMaterial({ color: 0xBACFFF, roughness: 0.3 }));
+    markers.add(line);
+    const mm = a.distanceTo(b) / MM;
+    $('readout').innerHTML =
+      `<span class="sw" style="background:#BACFFF"></span>` +
+      `<span>Medición: <b style="color:var(--periwinkle)">${mm.toFixed(1)} mm</b></span>` +
+      `<span style="margin-left:auto;color:var(--ink-muted);font-size:10px">Esc limpia</span>`;
+    measurePts = [];
+  }
+}
+
+/* ============================================================
+   Segmentos AHA-17 sobre la pared ventricular real
+   Clasificación paramétrica por vértice: posición longitudinal a lo largo del
+   eje del VI (banda) + ángulo alrededor del eje respecto al anterior (sector).
+   Un vértice pertenece al VI si su cavidad más cercana es la izquierda.
+   APROXIMACIÓN GEOMÉTRICA — los límites reales de segmento los define la
+   revisión clínica, no este cálculo.
+   ============================================================ */
+const wallMesh = meshes.find((m) => m.userData.part.fma === 'FMA13884');
+let ahaOn = false, ahaVertexSeg = null, wallOrigMat = null;
+
+/* Marco de referencia del VI */
+const AHA_FRAME = (() => {
+  if (!lvCav || !laCav) return null;
+  const axis = AXIS_LV;                                  // base -> ápex
+  // extensión longitudinal: proyecciones de la cavidad del VI sobre el eje
+  const lvMeshes = meshes.filter((m) => m.userData.part.fma === 'FMA9466');
+  let t0 = Infinity, t1 = -Infinity;
+  for (const m of lvMeshes) {
+    const pos = m.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      const t = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i))
+        .sub(laCav).dot(axis);
+      if (t < t0) t0 = t; if (t > t1) t1 = t;
+    }
+  }
+  // anterior (+Z del paciente) proyectado al plano perpendicular al eje
+  const u = new THREE.Vector3(0, 0, 1).addScaledVector(axis, -axis.z).normalize();
+  const v = new THREE.Vector3().crossVectors(axis, u);
+  // el sector crece de anterior hacia el septo (derecha del paciente, -X)
+  const septalSign = new THREE.Vector3(-1, 0, 0).dot(v) > 0 ? 1 : -1;
+  return { axis, origin: laCav.clone(), t0, t1, u, v, septalSign };
+})();
+
+/* Punto (coords de malla) -> id de segmento AHA 1..17, o 0 si queda fuera. */
+function ahaOf(pt) {
+  if (!AHA_FRAME) return 0;
+  const { axis, origin, t0, t1, u, v, septalSign } = AHA_FRAME;
+  const rel = pt.clone().sub(origin);
+  const t = (rel.dot(axis) - t0) / (t1 - t0);
+  if (t < -0.05) return 0;                       // por encima de la base: aurícula
+  const radial = rel.clone().addScaledVector(axis, -rel.dot(axis));
+  let th = Math.atan2(radial.dot(v) * septalSign, radial.dot(u));
+  if (th < 0) th += Math.PI * 2;
+  if (t >= 0.90) return 17;                                        // ápex
+  if (t >= 0.62) {                                                 // apical, 4 sectores
+    const s = Math.floor(((th + Math.PI / 4) % (Math.PI * 2)) / (Math.PI / 2));
+    return 13 + s;
+  }
+  const s = Math.floor(((th + Math.PI / 6) % (Math.PI * 2)) / (Math.PI / 3));
+  return (t >= 0.32 ? 7 : 1) + s;                                  // medio / basal
+}
+
+/* Pertenencia VI/VD por cavidad más cercana (muestreada) */
+function buildCavitySamples(fma, stride) {
+  const out = [];
+  for (const m of meshes) {
+    if (m.userData.part.fma !== fma) continue;
+    const pos = m.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i += stride)
+      out.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+  }
+  return out;
+}
+function nearestDist2(p, samples) {
+  let d = Infinity;
+  for (const s of samples) { const q = p.distanceToSquared(s); if (q < d) d = q; }
+  return d;
+}
+
+function paintWall() {
+  if (!wallMesh || !AHA_FRAME) return;
+  const pos = wallMesh.geometry.getAttribute('position');
+
+  if (!ahaVertexSeg) {                       // clasificar una sola vez
+    const lvS = buildCavitySamples('FMA9466', 4);
+    const rvS = buildCavitySamples('FMA9291', 4);
+    ahaVertexSeg = new Uint8Array(pos.count);
+    const p = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      p.set(pos.getX(i), pos.getY(i), pos.getZ(i));
+      ahaVertexSeg[i] = nearestDist2(p, lvS) <= nearestDist2(p, rvS) ? ahaOf(p) : 0;
+    }
+  }
+
+  const atRisk = lesion?.scct
+    ? new Set(SCCT_SEGMENTS.find((s) => s.code === lesion.scct)?.atRisk || [])
+    : null;
+
+  const colors = new Float32Array(pos.count * 3);
+  const cc = new THREE.Color(), dim = new THREE.Color(0x0A0D36);
+  for (let i = 0; i < pos.count; i++) {
+    const seg = ahaVertexSeg[i];
+    if (!seg) cc.set(HEART_COLOR).lerp(dim, 0.35);          // VD / fuera del marco
+    else {
+      const territory = AHA_SEGMENTS[seg - 1].territory;
+      cc.set(PALETTE.territory[territory] || HEART_COLOR);
+      if (atRisk) { if (atRisk.has(seg)) cc.offsetHSL(0, 0.08, 0.12); else cc.lerp(dim, 0.55); }
+    }
+    colors[i * 3] = cc.r; colors[i * 3 + 1] = cc.g; colors[i * 3 + 2] = cc.b;
+  }
+  wallMesh.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  if (!wallOrigMat) wallOrigMat = wallMesh.material;
+  wallMesh.material = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.68, metalness: 0.05,
+    clippingPlanes: clipOn ? [clipPlane] : null,
+    side: clipOn ? THREE.DoubleSide : THREE.FrontSide,
+  });
+}
+
+function setAha(on) {
+  ahaOn = on;
+  if (!wallMesh) return;
+  if (on) paintWall();
+  else if (wallOrigMat) { wallMesh.material.dispose(); wallMesh.material = wallOrigMat; }
+}
+$('ahaOn').addEventListener('change', (e) => setAha(e.target.checked));
+
+/* ============================================================
+   Flujo sanguíneo — onda de bombeo dentro del tejido del vaso.
+   Cada vértice de un vaso recibe su posición (0..1) a lo largo de la
+   centerline, orientada con la dirección fisiológica; el shader desplaza
+   bandas suaves de brillo por esa coordenada. Sin partículas: el vaso
+   entero pulsa como un conducto con caudal.
+   ============================================================ */
+const flowFactor = new Map();   // part.id -> multiplicador de caudal (lesión)
+const flowMats = [];            // materiales de vaso con uniforms de flujo
+let flowOn = true, flowTime = 0;
+
+(function buildFlow() {
+  const tmp = new THREE.Vector3();
+  for (const m of meshes) {
+    const part = m.userData.part;
+    if (!part.centerline || part.centerline.length < 2) continue;
+    let pts = clWorld(m);
+    const d0 = pts[0].length(), d1 = pts[pts.length - 1].length();
+    const inflow = INFLOW_FMA.has(part.fma) || part.group === 'cvein';
+    if (inflow ? d0 < d1 : d0 > d1) pts = [...pts].reverse();
+
+    // coordenada de flujo por vértice: índice de la muestra de centerline más cercana
+    const pos = m.geometry.getAttribute('position');
+    const flow = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      tmp.set(pos.getX(i) - center.x, pos.getY(i) - center.y, pos.getZ(i) - center.z);
+      let best = 0, bd = Infinity;
+      for (let k = 0; k < pts.length; k++) {
+        const d = tmp.distanceToSquared(pts[k]);
+        if (d < bd) { bd = d; best = k; }
+      }
+      flow[i] = best / (pts.length - 1);
+    }
+    m.geometry.setAttribute('aFlow', new THREE.BufferAttribute(flow, 1));
+
+    // longitud real -> frecuencia de banda comparable entre vasos cortos y largos
+    let len = 0;
+    for (let k = 1; k < pts.length; k++) len += pts[k].distanceTo(pts[k - 1]);
+    const u = {
+      uTime: { value: 0 },
+      uSpeed: { value: 1 },
+      uAmp: { value: 0.22 },
+      uFreq: { value: Math.max(2, Math.round(len / 0.014)) },
+    };
+    m.material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = 'attribute float aFlow;\nvarying float vFlow;\n' +
+        shader.vertexShader.replace('#include <begin_vertex>',
+          '#include <begin_vertex>\nvFlow = aFlow;');
+      shader.fragmentShader = 'varying float vFlow;\nuniform float uTime;\nuniform float uSpeed;\nuniform float uAmp;\nuniform float uFreq;\n' +
+        shader.fragmentShader.replace('vec4 diffuseColor = vec4( diffuse, opacity );',
+          'float fwave = 0.5 + 0.5 * sin((vFlow * uFreq - uTime * uSpeed) * 6.28318);\n' +
+          'fwave = smoothstep(0.35, 1.0, fwave);\n' +
+          'vec3 fdiff = diffuse * (1.0 + uAmp * fwave) ;\n' +
+          'vec4 diffuseColor = vec4( fdiff, opacity );');
+    };
+    m.material.customProgramCacheKey = () => 'flow';
+    m.material.needsUpdate = true;
+    m.userData.flowU = u;
+    flowMats.push(m);
+  }
+})();
+
+function updateFlow(dtSec) {
+  flowTime += dtSec;
+  for (const m of flowMats) {
+    const u = m.userData.flowU;
+    const f = flowFactor.get(m.userData.part.id) ?? 1;
+    u.uTime.value = flowTime;
+    u.uSpeed.value = 0.9 * f;                       // el caudal frena distal a la lesión
+    u.uAmp.value = flowOn ? 0.10 + 0.14 * f : 0;    // oclusión: onda casi estática y tenue
+  }
+}
+
+/* ============================================================
+   Severidad documentada — el flujo distal responde
+   ============================================================ */
+const SEVERITIES = {
+  '50':  { label: 'Leve <50%',      color: 0xE8B34A, factor: 0.55 },
+  '70':  { label: 'Severa 70-99%',  color: 0xE07030, factor: 0.2 },
+  '100': { label: 'Oclusión total', color: 0xD64545, factor: 0.015 },
+};
+
+function setSeverity(key) {
+  if (!lesion) return;
+  lesion.severity = key;
+  const sev = SEVERITIES[key];
+  for (const b of document.querySelectorAll('[data-sev]'))
+    b.classList.toggle('on', b.dataset.sev === key);
+  // el anillo toma el color de severidad
+  for (const c of markers.children)
+    if (c.geometry?.type === 'TorusGeometry') c.material.color.setHex(sev.color);
+  // frenar el flujo distal a la lesión, en su árbol
+  flowFactor.clear();
+  const ost = lesion.vessel === 'RCA' ? OSTIUM.R : OSTIUM.L;
+  for (const m of groupSets[lesion.vessel]) {
+    const cRel = m.geometry.boundingSphere.center.clone().sub(center);
+    if (cRel.distanceTo(ost) >= lesion.point.distanceTo(ost) * 0.98)
+      flowFactor.set(m.userData.part.id, sev.factor);
+  }
+  flowFactor.set(lesion.mesh.userData.part.id, sev.factor);
+}
+
+/* ============================================================
+   Etiquetas anatómicas — discretas, ancladas a la malla, con
+   oclusión: se atenúan cuando la estructura queda detrás.
+   ============================================================ */
+const LABEL_DEFS = [
+  ['FMA3736', 'Aorta'], ['FMA8612', 'Tronco pulmonar'],
+  ['FMA4720', 'Cava superior'], ['FMA10951', 'Cava inferior'],
+  ['FMA9531', 'Aurícula izq.'], ['FMA9457', 'Aurícula der.'],
+  ['FMA9466', 'Ventrículo izq.'], ['FMA9291', 'Ventrículo der.'],
+  ['FMA74912', 'DA'], ['FMA3802', 'CD'], ['FMA3895', 'Cx'],
+  ['FMA4706', 'Seno coronario'], ['FMA49916', 'VV. pulmonares'],
+];
+const labels = [];
+let labelsOn = false, occT = 0;
+
+for (const [fma, text] of LABEL_DEFS) {
+  const mesh = meshes.find((m) => m.userData.part.fma === fma);
+  if (!mesh) continue;
+  const el = document.createElement('div');
+  el.className = 'alabel';
+  el.textContent = text;
+  el.style.opacity = '0';
+  $('labels').appendChild(el);
+  labels.push({ mesh, el, local: mesh.geometry.boundingSphere.center.clone().sub(center), occluded: false });
+}
+
+const _lv = new THREE.Vector3();
+function updateLabels() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const now = performance.now();
+  const checkOcc = labelsOn && now - occT > 220;
+  if (checkOcc) occT = now;
+  for (const L of labels) {
+    if (!labelsOn || !L.mesh.visible) { L.el.style.opacity = '0'; continue; }
+    _lv.copy(L.local).add(L.mesh.position).multiplyScalar(beat.scale.x);
+    const anchor = _lv.clone();
+    _lv.project(camera);
+    if (_lv.z > 1 || Math.abs(_lv.x) > 1.1 || Math.abs(_lv.y) > 1.1) { L.el.style.opacity = '0'; continue; }
+    L.el.style.left = ((_lv.x * 0.5 + 0.5) * w) + 'px';
+    L.el.style.top = ((-_lv.y * 0.5 + 0.5) * h) + 'px';
+    if (checkOcc) {
+      const dir = anchor.clone().sub(camera.position);
+      const dist = dir.length();
+      raycaster.set(camera.position, dir.normalize());
+      const hits = raycaster.intersectObjects(meshes.filter((m) => m.visible && !m.material.transparent), false);
+      L.occluded = hits.length > 0 && hits[0].distance < dist - 0.006;
+    }
+    L.el.style.opacity = L.occluded ? '0.18' : '0.92';
+  }
+}
+$('labelsOn').addEventListener('change', (e) => { labelsOn = e.target.checked; });
+
+/* --- P6: ¿cómo lo documento? --- */
+$('snapBtn').onclick = () => {
+  renderer.render(scene, camera);
+  const a = document.createElement('a');
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.download = `pulsenet-atlas-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.png`;
+  a.click();
+};
+
+/* ---------- tamaño y bucle ---------- */
+let lastPickMs = 0, frames = [], lastT = performance.now(), statT = 0;
+
+function fit() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', fit);
+
+let beatOn = true, beatPhase = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  const dtSec = Math.min(0.1, (now - lastT) / 1000);
+  frames.push(now - lastT); lastT = now;
+  if (frames.length > 240) frames.shift();
+
+  if (beatOn) {
+    beatPhase = (beatPhase + dtSec * (64 / 60)) % 1;   // 64 lpm
+    const sys = Math.pow(Math.max(0, Math.sin(beatPhase * Math.PI * 2)), 3);
+    const k = 1 - 0.02 * sys;                          // contracción sistólica sutil
+    beat.scale.set(k, k, k);
+  } else {
+    beat.scale.set(1, 1, 1);
+  }
+
+  dampCamera(dtSec);
+  updateFlow(dtSec);
+  updateLabels();
+
+  if (wireAnim) {
+    const t = Math.min(1, (now - wireAnim.start) / 4000);
+    const total = wireAnim.tube.geometry.getIndex().count;
+    wireAnim.tube.geometry.setDrawRange(0, Math.floor(total * t));
+    wireAnim.tip.position.copy(wireAnim.curve.getPointAt(t));
+    if (t >= 1) wireAnim = null;
+  }
+
+  renderer.render(scene, camera);
+
+  if (now - statT > 500) {
+    statT = now;
+    const sorted = [...frames].sort((a, b) => a - b);
+    const p99 = sorted[Math.floor(sorted.length * 0.99)] || 1;
+    const mean = frames.reduce((a, b) => a + b, 0) / frames.length;
+    const info = renderer.info.render;
+    $('stat').innerHTML =
+      `<b>${(1000 / mean).toFixed(0)}</b> fps med · <b>${(1000 / p99).toFixed(0)}</b> 1% low<br>` +
+      `${(info.triangles / 1000).toFixed(0)}k triángulos · ${info.calls} draw calls<br>` +
+      `raycast ${lastPickMs.toFixed(2)} ms · ${manifest.parts.length} mallas`;
+  }
+}
+
+fit();
+applyCamera();
+renderReadout(null);
+$('loading').remove();   // sólo cuando TODO está cableado: ningún clic muere en silencio
+loop();
+</script>

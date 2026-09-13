@@ -1,0 +1,18 @@
+# ---- DATOS PERSONALES DE SALUD: nunca versionar ----
+condicion.json
+media/
+*.zip
+
+# ---- binarios pesados regenerables (ver bootstrap.sh) ----
+anatomy-full.bin
+anatomy-full.json
+body-subset.bin
+body-subset.json
+cardiac-subset.bin
+cardiac-subset.bin.gz
+cardiac-subset.json
+
+# ---- entorno ----
+.DS_Store
+node_modules/
+nohup.out
