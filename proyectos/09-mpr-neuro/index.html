@@ -1,0 +1,303 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Anatomy — MPR tri-planar</title>
+
+<style>
+  :root {
+    --bg: #0B0D12; --panel: #12151D; --line: #232838; --ink: #E5E9F2;
+    --mut: #8B93A8; --faint: #5A6178; --accent: #4D7FFF;
+    --ax: #E8B34A; --co: #4ADE9B; --sa: #E36B8B;
+    --mono: ui-monospace, Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+         font-size: 13px; overflow: hidden; }
+  .grid { display: grid; grid-template-columns: 200px 1fr 290px; height: 100dvh; gap: 1px;
+          background: var(--line); }
+  .grid > * { background: var(--bg); }
+
+  /* ---- lecciones ---- */
+  .lessons { padding: 14px 12px; overflow-y: auto; }
+  .eyebrow { font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+             letter-spacing: 0.14em; color: var(--faint); }
+  .lessons h1 { font-size: 14px; margin: 4px 0 2px; font-weight: 650; }
+  .lessons .meta { font-size: 10px; color: var(--mut); margin-bottom: 12px; }
+  .lessons .meta a { color: var(--mut); }
+  .lvl { padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;
+         color: var(--mut); display: flex; align-items: center; gap: 8px; }
+  .lvl:hover { background: var(--panel); color: var(--ink); }
+  .lvl.on { background: #1A2540; color: #fff; }
+  .lvl .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+  .lvl.on .dot { background: var(--accent); }
+  .note { font-size: 9.5px; line-height: 1.5; color: var(--faint); margin-top: 14px;
+          border-top: 1px solid var(--line); padding-top: 10px; }
+
+  /* ---- 3D ---- */
+  .three { position: relative; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .tag3d { position: absolute; top: 10px; left: 12px; font-family: var(--mono); font-size: 9.5px;
+           color: var(--faint); letter-spacing: 0.12em; }
+  .readout { position: absolute; left: 12px; bottom: 10px; font-family: var(--mono);
+             font-size: 10.5px; color: var(--mut); }
+
+  /* ---- paneles MPR ---- */
+  .mpr { display: grid; grid-template-rows: 1fr 1fr 1fr; gap: 1px; background: var(--line); }
+  .mp { background: #000; position: relative; display: flex; align-items: center;
+        justify-content: center; overflow: hidden; }
+  .mp img { max-width: 100%; max-height: 100%; }
+  .mp .cap { position: absolute; top: 6px; left: 8px; right: 8px; display: flex;
+             font-family: var(--mono); font-size: 9.5px; }
+  .mp .cap b { letter-spacing: 0.1em; }
+  .mp .cap span:last-child { margin-left: auto; color: var(--faint); }
+  .mp .bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #1A1E2A; }
+  .mp .bar i { display: block; height: 100%; }
+  .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: var(--mono); font-size: 12px; color: var(--faint); background: var(--bg); z-index: 9; }
+</style>
+
+<div class="grid">
+  <aside class="lessons">
+    <div class="eyebrow">3D Anatomy · Proyecto 09</div>
+    <h1>Columna lumbar MPR</h1>
+    <div class="meta">RM real tri-planar · <a href="../">← proyectos</a><br>
+      fuente: x.com/CeoImed/…0223</div>
+    <div class="eyebrow" style="margin-bottom:6px">Niveles</div>
+    <div id="levels"></div>
+    <div class="note">Estudio personal local (no está en el repo). Las tres series salen de los
+      NIfTI de tu RM: sagital T2 (17), coronal T2 (16), axial T2 (44), re-renderizadas sin el
+      texto quemado del export. Mapeo nivel→corte aproximado. Rueda sobre cada panel para
+      recorrer su serie; el plano se mueve en el 3D.</div>
+  </aside>
+
+  <main class="three">
+    <canvas id="gl"></canvas>
+    <div class="tag3d">3D · ARRASTRA PARA ROTAR</div>
+    <div class="readout" id="readout"></div>
+  </main>
+
+  <aside class="mpr">
+    <div class="mp" data-s="axial">
+      <div class="cap"><b style="color:var(--ax)">AXIAL</b><span id="axN"></span></div>
+      <img id="axImg" alt="axial"><div class="bar"><i id="axBar" style="background:var(--ax)"></i></div>
+    </div>
+    <div class="mp" data-s="coronal">
+      <div class="cap"><b style="color:var(--co)">CORONAL</b><span id="coN"></span></div>
+      <img id="coImg" alt="coronal"><div class="bar"><i id="coBar" style="background:var(--co)"></i></div>
+    </div>
+    <div class="mp" data-s="sagital">
+      <div class="cap"><b style="color:var(--sa)">SAGITAL</b><span id="saN"></span></div>
+      <img id="saImg" alt="sagital"><div class="bar"><i id="saBar" style="background:var(--sa)"></i></div>
+    </div>
+  </aside>
+</div>
+<div class="loading" id="loading">cargando el estudio…</div>
+
+<script type="module">
+import * as THREE from '../../vendor/three.module.min.js';
+
+const $ = (id) => document.getElementById(id);
+const LEVELS = [
+  ['L1', 'first lumbar vertebra'], ['L2', 'second lumbar vertebra'],
+  ['L3', 'third lumbar vertebra'], ['L4', 'fourth lumbar vertebra'],
+  ['L5', 'fifth lumbar vertebra'], ['L5-S1', 'disk of fifth lumbar'], ['Sacro', 'sacrum'],
+];
+
+/* ---------- series reales (locales) ---------- */
+async function serie(dir) {
+  try {
+    const j = await fetch(`../../${dir}/index.json`, { cache: 'no-store' }).then((r) => r.ok ? r.json() : null);
+    return j?.files?.map((f) => `../../${dir}/${f}`) || null;
+  } catch { return null; }
+}
+const S = {
+  axial: await serie('media/rm-mpr/axial'),
+  coronal: await serie('media/rm-mpr/coronal'),
+  sagital: await serie('media/rm-mpr/sagital'),
+};
+if (!S.axial || !S.coronal || !S.sagital) {
+  $('loading').textContent = 'Este proyecto usa el estudio personal local (media/rm-*), no incluido en el repo.';
+  throw new Error('sin estudio local');
+}
+
+/* ---------- 3D: columna + tres planos ---------- */
+const manifest = await fetch('../../anatomy-full.json').then((r) => r.json());
+const bin = await fetch('../../anatomy-full.bin').then((r) => r.arrayBuffer());
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
+renderer.setClearColor(0x0B0D12, 1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(34, 1, 0.005, 10);
+const key = new THREE.DirectionalLight(0xdfe8ff, 1.5); key.position.set(3, 4, 3);
+scene.add(key, new THREE.HemisphereLight(0x8fa3c4, 0x101318, 0.9), new THREE.AmbientLight(0xffffff, 0.25));
+const root = new THREE.Group(); scene.add(root);
+
+const meshes = [], byLevel = new Map();
+const bbox = new THREE.Box3();
+for (const p of manifest.parts) {
+  const n = p.name.toLowerCase();
+  const isSpine = /lumbar vertebra|disk of .* lumbar|sacrum|twelfth thoracic/.test(n) && !n.includes('spinalis');
+  if (!isSpine) continue;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
+  g.computeBoundingSphere();
+  const disco = n.includes('disk');
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(disco ? '#C98A4B' : '#B9C1D4'),
+    roughness: 0.5, metalness: 0.05, clearcoat: 0.3,
+    transparent: true, opacity: 0.92 });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.userData = { part: p, baseColor: mat.color.clone() };
+  root.add(mesh); meshes.push(mesh);
+  const L = LEVELS.find(([, m]) => n.includes(m) && (m.includes('disk') ? true : !n.includes('disk')));
+  if (L) (byLevel.get(L[0]) ?? byLevel.set(L[0], []).get(L[0])).push(mesh);
+  bbox.expandByObject(mesh);
+}
+const center = bbox.getCenter(new THREE.Vector3());
+root.position.sub(center);
+const size = bbox.getSize(new THREE.Vector3());
+const radius = size.length() / 2;
+
+/* caja de referencia como en el video */
+const frame = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x * 1.7, size.y * 1.15, size.z * 2.2)),
+  new THREE.LineBasicMaterial({ color: 0x2A3148 }));
+scene.add(frame);
+
+/* tres planos texturizados con el corte vigente */
+const texLoader = new THREE.TextureLoader();
+const cache = new Map();
+function tex(url) {
+  if (!cache.has(url)) {
+    const t = texLoader.load(url);
+    t.colorSpace = THREE.SRGBColorSpace;
+    cache.set(url, t);
+  }
+  return cache.get(url);
+}
+function mkPlane(w, h, colorHex) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0.92, toneMapped: false }));
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),
+    new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 }));
+  m.add(edge);
+  scene.add(m);
+  return m;
+}
+const W = size.x * 1.7, H = size.y * 1.15, D = size.z * 2.2;
+const plAx = mkPlane(W, D, 0xE8B34A); plAx.rotation.x = -Math.PI / 2;
+const plCo = mkPlane(W, H, 0x4ADE9B);
+const plSa = mkPlane(D, H, 0xE36B8B); plSa.rotation.y = Math.PI / 2;
+
+/* ---------- estado por serie ---------- */
+const st = {
+  axial:   { files: S.axial,   i: Math.floor(S.axial.length / 2),   img: 'axImg', n: 'axN', bar: 'axBar' },
+  coronal: { files: S.coronal, i: Math.floor(S.coronal.length / 2), img: 'coImg', n: 'coN', bar: 'coBar' },
+  sagital: { files: S.sagital, i: Math.floor(S.sagital.length / 2), img: 'saImg', n: 'saN', bar: 'saBar' },
+};
+function setSlice(k, i) {
+  const s = st[k];
+  s.i = Math.max(0, Math.min(s.files.length - 1, i));
+  const url = s.files[s.i];
+  $(s.img).src = url;
+  $(s.n).textContent = `${s.i + 1} / ${s.files.length}`;
+  $(s.bar).style.width = (100 * (s.i + 1) / s.files.length) + '%';
+  const t = s.files.length > 1 ? s.i / (s.files.length - 1) : 0.5;
+  if (k === 'axial') { plAx.material.map = tex(url); plAx.position.y = H / 2 - t * H; }
+  if (k === 'coronal') { plCo.material.map = tex(url); plCo.position.z = D / 2 - t * D; }
+  if (k === 'sagital') { plSa.material.map = tex(url); plSa.position.x = -W / 2 + t * W; }
+  st[k] && (plAx.material.needsUpdate = plCo.material.needsUpdate = plSa.material.needsUpdate = true);
+}
+for (const [k] of Object.entries(st)) setSlice(k, st[k].i);
+
+for (const mp of document.querySelectorAll('.mp')) {
+  mp.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const k = mp.dataset.s === 'sagital' ? 'sagital' : mp.dataset.s;
+    setSlice(k, st[k].i + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: false });
+}
+
+/* ---------- niveles ---------- */
+const levelY = new Map();
+for (const [id] of LEVELS) {
+  const arr = byLevel.get(id) || [];
+  if (!arr.length) continue;
+  let y = 0; for (const m of arr) y += m.geometry.boundingSphere.center.y;
+  levelY.set(id, y / arr.length - center.y);
+}
+const yTop = Math.max(...levelY.values()), yBot = Math.min(...levelY.values());
+$('levels').innerHTML = LEVELS.map(([id]) =>
+  `<div class="lvl" data-l="${id}"><span class="dot"></span>${id}</div>`).join('');
+function setLevel(id) {
+  document.querySelectorAll('.lvl').forEach((e) => e.classList.toggle('on', e.dataset.l === id));
+  for (const m of meshes) m.material.color.copy(m.userData.baseColor);
+  for (const m of byLevel.get(id) || [])
+    m.material.color.copy(m.userData.baseColor).lerp(new THREE.Color(0x4D7FFF), 0.55);
+  const yy = levelY.get(id) ?? 0;
+  const t = (yTop - yy) / (yTop - yBot || 1);
+  setSlice('axial', Math.round(t * (st.axial.files.length - 1)));
+  orbit.target.set(0, yy, 0);
+  $('readout').textContent = `Nivel ${id} — el plano axial saltó a su corte`;
+}
+document.querySelectorAll('.lvl').forEach((e) =>
+  e.addEventListener('click', () => setLevel(e.dataset.l)));
+
+/* ---------- cámara ---------- */
+const orbit = { az: 0.7, el: 0.16, dist: radius * 2.6, target: new THREE.Vector3() };
+const cur = { az: orbit.az, el: orbit.el, dist: orbit.dist, target: orbit.target.clone() };
+function applyCamera() {
+  const ce = Math.cos(cur.el);
+  camera.position.set(
+    cur.target.x + cur.dist * ce * Math.sin(cur.az),
+    cur.target.y + cur.dist * Math.sin(cur.el),
+    cur.target.z + cur.dist * ce * Math.cos(cur.az));
+  camera.lookAt(cur.target);
+}
+function dampCamera(dt) {
+  const k = 1 - Math.exp(-dt * 9);
+  cur.az += (orbit.az - cur.az) * k; cur.el += (orbit.el - cur.el) * k;
+  cur.dist += (orbit.dist - cur.dist) * k; cur.target.lerp(orbit.target, k);
+  applyCamera();
+}
+const canvas = $('gl');
+let dragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerup', (e) => { dragging = false; canvas.releasePointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  orbit.az -= (e.clientX - lastX) * 0.006;
+  orbit.el = Math.max(-1.2, Math.min(1.2, orbit.el + (e.clientY - lastY) * 0.006));
+  lastX = e.clientX; lastY = e.clientY;
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orbit.dist = Math.max(radius * 0.6, Math.min(radius * 5, orbit.dist * Math.exp(e.deltaY * 0.0018)));
+}, { passive: false });
+
+function fit() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+  applyCamera();
+}
+addEventListener('resize', fit);
+let lastT = performance.now();
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  dampCamera(Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  renderer.render(scene, camera);
+}
+fit();
+setLevel('L5-S1');
+/* encuadre inicial: vista completa, no pegado al nivel */
+orbit.target.set(0, 0, 0); orbit.dist = radius * 3.6; orbit.az = 0.85; orbit.el = 0.12;
+cur.az = orbit.az; cur.el = orbit.el; cur.dist = orbit.dist; cur.target.copy(orbit.target);
+$('loading').remove();
+loop();
+</script>
