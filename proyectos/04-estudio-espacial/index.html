@@ -1,335 +1,349 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Estudio espacial — diagrama · corte · 3D</title>
+<title>3D ANATOMY — 腹部 MPR</title>
 
 <style>
   :root {
-    --ink: #111827; --mut: #6B7280; --faint: #9CA3AF;
-    --line: #E5E7EB; --panel: rgba(255,255,255,0.94); --accent: #2563EB;
+    --bg: #0B0D11; --panel: #11141B; --panel2: #171B24; --line: #222836;
+    --ink: #E6E9F1; --mut: #8A92A6; --faint: #5A6174; --acc: #4D8BFF;
     --mono: ui-monospace, Menlo, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --sans: "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #FAFAFB; color: var(--ink); font-family: var(--sans);
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
          font-size: 13px; overflow: hidden; }
-  .hdr { position: fixed; top: 18px; left: 24px; z-index: 5; pointer-events: none; }
-  .eyebrow { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
-             letter-spacing: 0.14em; color: var(--faint); }
-  .hdr h1 { margin: 3px 0 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
-  .hdr .meta { font-size: 11px; color: var(--mut); }
-  .hdr .meta a { color: var(--mut); pointer-events: auto; }
+  .app { display: grid; height: 100dvh; gap: 1px; background: var(--line);
+         grid-template-columns: 216px 1fr 340px;
+         grid-template-rows: 46px 1fr 240px; }
+  .app > * { background: var(--bg); min-width: 0; min-height: 0; }
 
-  .cols { display: grid; grid-template-columns: 220px 1fr 340px; height: 100dvh; padding-top: 76px; gap: 0; }
-  @media (max-width: 900px) { .cols { grid-template-columns: 150px 1fr; }
-    .axial { position: fixed; right: 10px; bottom: 10px; width: 200px !important; height: 200px !important;
-             border-radius: 12px; border: 1px solid var(--line); } }
+  /* ---- top bar ---- */
+  .top { grid-column: 1 / 4; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+         background: var(--panel); }
+  .top .ey { font: 10px var(--mono); letter-spacing: 0.22em; color: var(--faint); }
+  .top b { font-size: 13px; font-weight: 600; }
+  .tabs { margin: 0 auto; display: flex; gap: 2px; background: var(--bg);
+          border: 1px solid var(--line); border-radius: 9px; padding: 2px; }
+  .tabs button { border: 0; background: none; color: var(--mut); font-size: 11.5px;
+                 padding: 5px 14px; border-radius: 7px; cursor: pointer; }
+  .tabs button.on { background: var(--panel2); color: var(--ink); }
+  .src { font: 9.5px var(--mono); color: var(--faint); text-decoration: none; }
 
-  /* ---- panel diagrama ---- */
-  .diagram { border-right: 1px solid var(--line); background: #fff; padding: 10px 8px; overflow-y: auto; }
-  .diagram .cap { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
-                  letter-spacing: 0.1em; color: var(--faint); text-align: center; margin-bottom: 6px; }
-  .diagram svg { width: 100%; display: block; }
-  .diagram .lvl { cursor: pointer; }
-  .diagram .lvl rect, .diagram .lvl ellipse, .diagram .lvl path { transition: fill 140ms ease; }
-  .diagram .lvl text { font-family: var(--mono); font-size: 7px; fill: var(--mut); pointer-events: none; }
-  .diagram .lvl.on rect, .diagram .lvl.on ellipse, .diagram .lvl.on path { fill: #2563EB !important; }
-  .diagram .lvl.on text { fill: #fff; font-weight: 700; }
+  /* ---- sidebar ---- */
+  .side { grid-row: 2 / 4; overflow-y: auto; padding: 12px 10px; background: var(--panel); }
+  .gl { font: 9.5px var(--mono); letter-spacing: 0.14em; color: var(--faint); display: block;
+        margin: 10px 4px 6px; }
+  .lesson { padding: 8px 10px; border-radius: 9px; cursor: pointer; color: var(--mut);
+            font-size: 11.5px; line-height: 1.4; display: flex; gap: 8px; }
+  .lesson:hover { background: var(--panel2); color: var(--ink); }
+  .lesson.on { background: #16233C; color: #CFE0FF; }
+  .lesson .n { font-family: var(--mono); font-size: 10px; color: var(--faint); padding-top: 1px; }
+  .st { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px;
+        cursor: pointer; color: var(--mut); font-size: 12px; }
+  .st:hover { background: var(--panel2); color: var(--ink); }
+  .st .sw { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  .st .eye { margin-left: auto; font: 10px var(--mono); color: var(--faint); }
+  .st.off { opacity: 0.4; }
+  .note { font-size: 9.5px; line-height: 1.5; color: var(--faint); margin: 14px 4px 0;
+          border-top: 1px solid var(--line); padding-top: 9px; }
 
   /* ---- 3D ---- */
   .three { position: relative; }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-  .readout { position: absolute; left: 14px; bottom: 14px; max-width: 480px;
-    font-family: var(--mono); font-size: 11px; background: var(--panel);
-    border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
-    box-shadow: 0 6px 22px rgba(17,24,39,0.06); pointer-events: none; }
-  .hint { position: absolute; right: 14px; top: 8px; font-family: var(--mono);
-          font-size: 9.5px; color: var(--faint); pointer-events: none; }
+  .three canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .hud { position: absolute; top: 8px; left: 10px; font: 9.5px var(--mono); color: var(--faint);
+         letter-spacing: 0.12em; }
+  .zoom { position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+          display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .zoom button { width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 7px;
+                 background: rgba(17,20,27,0.9); color: var(--mut); cursor: pointer; }
+  .zoom button:hover { color: var(--ink); }
+  .zoom .pct { font: 9px var(--mono); color: var(--faint); }
 
-  /* ---- panel axial ---- */
-  .axial { border-left: 1px solid var(--line); background: #0B0D12; position: relative;
-           display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .axial img, .axial svg { max-width: 100%; max-height: 100%; }
-  .axial .cap { position: absolute; top: 8px; left: 10px; right: 10px;
-    font-family: var(--mono); font-size: 9.5px; color: #9CA3AF; display: flex; }
-  .axial .cap b { color: #E5E7EB; }
-  .axial .cap span:last-child { margin-left: auto; }
-  .axial .foot { position: absolute; bottom: 8px; left: 10px; right: 10px;
-    font-family: var(--mono); font-size: 9px; color: #6B7280; }
+  /* ---- MPR panels ---- */
+  .mp { position: relative; background: #000; display: flex; align-items: center;
+        justify-content: center; overflow: hidden; }
+  .mp img { max-width: 100%; max-height: 100%; }
+  .mp .cap { position: absolute; top: 6px; left: 8px; right: 8px; display: flex; z-index: 2;
+             font-family: var(--mono); font-size: 10px; }
+  .mp .cap b { font-family: var(--sans); font-weight: 600; letter-spacing: 0.06em; }
+  .mp .cap span:last-child { margin-left: auto; color: var(--faint); }
+  .mp .bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #161A22; }
+  .mp .bar i { display: block; height: 100%; }
+  .mp.on { outline: 1px solid var(--acc); outline-offset: -1px; }
+  .ax { grid-row: 2; grid-column: 3; }
+  .bottom { grid-row: 3; grid-column: 2 / 4; display: grid; grid-template-columns: 1fr 1fr;
+            gap: 1px; background: var(--line); }
+  .bottom > * { background: #000; }
   .loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-             font-family: var(--mono); font-size: 12px; color: var(--faint); background: #FAFAFB; z-index: 9; }
+             font: 12px var(--mono); color: var(--faint); background: var(--bg); z-index: 20; }
 </style>
 
-<header class="hdr">
-  <div class="eyebrow">Proyecto 04 · fuente: x.com/ZentrixHQ/status/2097579544366534955</div>
-  <h1>Estudio espacial — columna lumbar</h1>
-  <div class="meta">diagrama ⇄ 3D ⇄ corte axial, siempre sincronizados · <a href="../">← proyectos</a></div>
-</header>
+<div class="app">
+  <header class="top">
+    <span class="ey">3D ANATOMY</span><b>腹部 — 断面と立体</b>
+    <nav class="tabs" id="tabs">
+      <button data-t="overview" class="on">概観</button>
+      <button data-t="axial">軸位</button>
+      <button data-t="coronal">冠状位</button>
+      <button data-t="sagital">矢状位</button>
+    </nav>
+    <a class="src" href="https://x.com/ZentrixHQ/status/2097579544366534955" target="_blank" rel="noreferrer">fuente ↗</a>
+  </header>
 
-<div class="cols">
-  <aside class="diagram">
-    <div class="cap">Diagrama — vista lateral</div>
-    <svg id="diag" viewBox="0 0 100 300" aria-label="Esquema lateral de la columna lumbar"></svg>
+  <aside class="side">
+    <span class="gl">ガイドレッスン</span>
+    <div id="lessons"></div>
+    <span class="gl">構造</span>
+    <div id="structs"></div>
+    <div class="note">TC: Medical Decathlon Task03 liver_100 (CC BY-SA 4.0, vía 3D Slicer
+      SampleData) — dato público, no es un paciente identificable. Órganos segmentados
+      localmente con TotalSegmentator. Réplica local del visor del video.</div>
   </aside>
 
   <main class="three">
     <canvas id="gl"></canvas>
-    <div class="hint">rueda: nivel · arrastra: rotar · los tres paneles se mueven juntos</div>
-    <div class="readout" id="readout">…</div>
+    <div class="hud">ドラッグで回転 · ホイールでズーム</div>
+    <div class="zoom">
+      <button id="zin">+</button><span class="pct" id="zpct">100%</span><button id="zout">−</button>
+    </div>
   </main>
 
-  <aside class="axial">
-    <div class="cap"><span>Corte axial — <b id="axLvl">…</b></span><span id="axSrc">…</span></div>
-    <div id="axHost"></div>
-    <div class="foot" id="axFoot"></div>
-  </aside>
+  <div class="mp ax on" data-s="axial">
+    <div class="cap"><b>軸位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">AXIAL</span></b><span id="axN"></span></div>
+    <img id="axImg" alt="axial"><div class="bar"><i id="axBar" style="background:#E8B34A"></i></div>
+  </div>
+
+  <div class="bottom">
+    <div class="mp" data-s="coronal">
+      <div class="cap"><b>冠状位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">CORONAL</span></b><span id="coN"></span></div>
+      <img id="coImg" alt="coronal"><div class="bar"><i id="coBar" style="background:#4ADE9B"></i></div>
+    </div>
+    <div class="mp" data-s="sagital">
+      <div class="cap"><b>矢状位 <span style="color:var(--faint);font-family:var(--mono);font-size:9px">SAGITTAL</span></b><span id="saN"></span></div>
+      <img id="saImg" alt="sagital"><div class="bar"><i id="saBar" style="background:#E36B8B"></i></div>
+    </div>
+  </div>
 </div>
-<div class="loading" id="loading">preparando el estudio…</div>
+<div class="loading" id="loading">腹部を構築中…</div>
 
 <script type="module">
 import * as THREE from '../../vendor/three.module.min.js';
-
-/* ---------- niveles del estudio (de arriba a abajo) ---------- */
-const LEVELS = [
-  { id: 'L1',  tipo: 'vertebra', match: 'first lumbar vertebra',  not: 'disk' },
-  { id: 'L1-L2', tipo: 'disco',  match: 'disk of first lumbar' },
-  { id: 'L2',  tipo: 'vertebra', match: 'second lumbar vertebra', not: 'disk' },
-  { id: 'L2-L3', tipo: 'disco',  match: 'disk of second lumbar' },
-  { id: 'L3',  tipo: 'vertebra', match: 'third lumbar vertebra',  not: 'disk' },
-  { id: 'L3-L4', tipo: 'disco',  match: 'disk of third lumbar' },
-  { id: 'L4',  tipo: 'vertebra', match: 'fourth lumbar vertebra', not: 'disk' },
-  { id: 'L4-L5', tipo: 'disco',  match: 'disk of fourth lumbar' },
-  { id: 'L5',  tipo: 'vertebra', match: 'fifth lumbar vertebra',  not: 'disk' },
-  { id: 'L5-S1', tipo: 'disco',  match: 'disk of fifth lumbar' },
-  { id: 'Sacro', tipo: 'hueso',  match: 'sacrum' },
-];
-const NOTAS = {
-  'L5-S1': 'El nivel más cargado de la columna: soporta el peso de todo el tronco. El sitio más común de protrusión discal.',
-  'L4-L5': 'Segundo nivel más móvil y más propenso a hernia.',
-  Sacro: 'Cinco vértebras fusionadas; transmite la carga a la pelvis.',
-};
-
 const $ = (id) => document.getElementById(id);
 
-/* ---------- cargar anatomía y filtrar la columna lumbar ---------- */
-const manifest = await fetch('../../anatomy-full.json').then((r) => r.json());
-const bin = await fetch('../../anatomy-full.bin').then((r) => r.arrayBuffer());
+/* ---------- datos (públicos, incluidos en el repo) ---------- */
+async function jget(u) { const r = await fetch(u); return r.ok ? r.json() : null; }
+const [geom, orgMan] = await Promise.all([
+  jget('data/geom.json'), jget('data/organs.json')]);
+const orgBin = await fetch('data/organs.bin').then((r) => r.arrayBuffer());
+const series = {};
+for (const k of ['axial', 'coronal', 'sagital'])
+  series[k] = (await jget(`data/${k}/index.json`)).files.map((f) => `data/${k}/${f}`);
 
+/* ---------- escena RAS mm ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
-renderer.setClearColor(0xFAFAFB, 1);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.setClearColor(0x0B0D11, 1);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(34, 1, 0.005, 10);
-const key = new THREE.DirectionalLight(0xfff4ec, 1.6); key.position.set(3, 4, 3);
-const rim = new THREE.DirectionalLight(0xdfe8ff, 0.7); rim.position.set(-4, 1, -3);
-scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0x8a8f9e, 0.9), new THREE.AmbientLight(0xffffff, 0.3));
-const root = new THREE.Group(); scene.add(root);
+const camera = new THREE.PerspectiveCamera(32, 1, 1, 5000);
+scene.add(new THREE.HemisphereLight(0x9FB0CC, 0x0E1014, 0.9), new THREE.AmbientLight(0xffffff, 0.35));
+const key = new THREE.DirectionalLight(0xEFE6D8, 1.3); key.position.set(250, 380, 300); scene.add(key);
+const root = new THREE.Group();
+root.rotation.x = -Math.PI / 2;         /* RAS z→arriba */
+scene.add(root);
 
-const meshes = [];
-const byLevel = new Map();
-const bbox = new THREE.Box3();
-for (const p of manifest.parts) {
-  const n = p.name.toLowerCase();
-  const lvl = LEVELS.find((L) => n.includes(L.match) && (!L.not || !n.includes(L.not)));
-  if (!lvl) continue;
+function addParts(man, bin, opts) {
+  const out = [];
+  for (const p of man.parts) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.pos, p.nv * 3), 3));
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.idx, p.ni), 1));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(p.color), ...opts }));
+    root.add(m); out.push(m);
+  }
+  return out;
+}
+const orgMeshes = addParts(orgMan, orgBin, {
+  roughness: 0.5, metalness: 0.03, clearcoat: 0.35,
+  transparent: true, opacity: 0.96 });
+
+/* caja de referencia */
+const lo = geom.axial.lo, hi = geom.axial.hi;
+const frame = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])),
+  new THREE.LineBasicMaterial({ color: 0x2A3148 }));
+frame.position.set((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+root.add(frame);
+const centerRas = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+root.position.copy(centerRas.clone().applyEuler(root.rotation).negate());
+const radius = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
+
+/* ---------- planos de corte ---------- */
+const texLoader = new THREE.TextureLoader();
+const cache = new Map();
+function tex(url) {
+  if (!cache.has(url)) {
+    const t = texLoader.load(url); t.colorSpace = THREE.SRGBColorSpace;
+    cache.set(url, t);
+  }
+  return cache.get(url);
+}
+function quad(verts, colorHex) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
-  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
-  g.computeBoundingSphere();
-  const col = lvl.tipo === 'disco' ? '#D9A05E' : '#E6E0D2';
-  const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(col),
-    roughness: 0.55, metalness: 0.02, clearcoat: 0.3 });
-  const mesh = new THREE.Mesh(g, mat);
-  mesh.userData = { part: p, lvl: lvl.id, baseColor: mat.color.clone() };
-  root.add(mesh); meshes.push(mesh);
-  (byLevel.get(lvl.id) ?? byLevel.set(lvl.id, []).get(lvl.id)).push(mesh);
-  bbox.expandByObject(mesh);
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts.flat()), 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]), 2));
+  g.setIndex([0, 2, 1, 1, 2, 3]);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    side: THREE.DoubleSide, transparent: true, opacity: 0.96, toneMapped: false }));
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g),
+    new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 })));
+  m.renderOrder = 2;
+  root.add(m);
+  return m;
 }
-const center = bbox.getCenter(new THREE.Vector3());
-root.position.sub(center);
-const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
+const gA = geom.axial, gC = geom.coronal, gS = geom.sagital;
+const plAx = quad([[gA.hi[0], gA.hi[1], 0], [gA.lo[0], gA.hi[1], 0],
+                   [gA.hi[0], gA.lo[1], 0], [gA.lo[0], gA.lo[1], 0]], 0xE8B34A);
+const plCo = quad([[gC.hi[0], 0, gC.hi[2]], [gC.lo[0], 0, gC.hi[2]],
+                   [gC.hi[0], 0, gC.lo[2]], [gC.lo[0], 0, gC.lo[2]]], 0x4ADE9B);
+const plSa = quad([[0, gS.lo[1], gS.hi[2]], [0, gS.hi[1], gS.hi[2]],
+                   [0, gS.lo[1], gS.lo[2]], [0, gS.hi[1], gS.lo[2]]], 0xE36B8B);
 
-/* alturas por nivel (para el plano y el mapeo de cortes) */
-const levelY = new Map();
-for (const L of LEVELS) {
-  const arr = byLevel.get(L.id) || [];
-  if (!arr.length) continue;
-  let y = 0; for (const m of arr) y += m.geometry.boundingSphere.center.y;
-  levelY.set(L.id, y / arr.length - center.y);
+const st = {
+  axial:   { plane: plAx, g: gA, axis: 2, i: Math.floor(series.axial.length * 0.55),  img: 'axImg', n: 'axN', bar: 'axBar' },
+  coronal: { plane: plCo, g: gC, axis: 1, i: Math.floor(series.coronal.length / 2), img: 'coImg', n: 'coN', bar: 'coBar' },
+  sagital: { plane: plSa, g: gS, axis: 0, i: Math.floor(series.sagital.length / 2), img: 'saImg', n: 'saN', bar: 'saBar' },
+};
+function setSlice(k, i) {
+  const s = st[k];
+  s.i = Math.max(0, Math.min(series[k].length - 1, i));
+  const url = series[k][s.i];
+  $(s.img).src = url;
+  $(s.n).textContent = `${s.i + 1} / ${series[k].length} · z ${s.g.slices[s.i].toFixed(0)} mm`;
+  $(s.bar).style.width = (100 * (s.i + 1) / series[k].length) + '%';
+  s.plane.material.map = tex(url); s.plane.material.needsUpdate = true;
+  const pos = [0, 0, 0]; pos[s.axis] = s.g.slices[s.i];
+  s.plane.position.set(...pos);
 }
-const yTop = Math.max(...levelY.values()), yBot = Math.min(...levelY.values());
+for (const k of Object.keys(st)) setSlice(k, st[k].i);
 
-/* plano de corte visible en el 3D */
-const plane = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.24, 0.24),
-  new THREE.MeshBasicMaterial({ color: 0x2563EB, transparent: true, opacity: 0.14,
-    side: THREE.DoubleSide, depthWrite: false }));
-plane.rotation.x = Math.PI / 2;
-const planeEdge = new THREE.LineSegments(
-  new THREE.EdgesGeometry(plane.geometry),
-  new THREE.LineBasicMaterial({ color: 0x2563EB, transparent: true, opacity: 0.7 }));
-planeEdge.rotation.x = Math.PI / 2;
-scene.add(plane, planeEdge);
+for (const mp of document.querySelectorAll('.mp')) {
+  mp.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    setSlice(mp.dataset.s, st[mp.dataset.s].i + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: false });
+  mp.addEventListener('click', () => setView(mp.dataset.s));
+}
+
+/* ---------- tabs / vistas ---------- */
+let view = 'overview';
+function setView(v) {
+  view = v;
+  document.querySelectorAll('#tabs button').forEach((b) =>
+    b.classList.toggle('on', b.dataset.t === v));
+  document.querySelectorAll('.mp').forEach((m) =>
+    m.classList.toggle('on', m.dataset.s === v));
+  plAx.visible = v === 'overview' || v === 'axial';
+  plCo.visible = v === 'overview' || v === 'coronal';
+  plSa.visible = v === 'overview' || v === 'sagital';
+  if (v === 'axial')   { orbit.az = 0.6;  orbit.el = 0.9; }
+  if (v === 'coronal') { orbit.az = 0.0;  orbit.el = 0.1; }
+  if (v === 'sagital') { orbit.az = 1.35; orbit.el = 0.1; }
+  if (v === 'overview'){ orbit.az = 0.7;  orbit.el = 0.25; }
+}
+document.querySelectorAll('#tabs button').forEach((b) =>
+  b.addEventListener('click', () => setView(b.dataset.t)));
+
+/* ---------- estructuras ---------- */
+const groups = orgMan.parts.map((p, i) => (
+  { id: 'g' + i, label: p.name, color: p.color, meshes: [orgMeshes[i]], on: true }));
+$('structs').innerHTML = groups.map((s) =>
+  `<div class="st" data-id="${s.id}"><span class="sw" style="background:${s.color}"></span>
+   ${s.label}<span class="eye">表示</span></div>`).join('');
+document.querySelectorAll('.st').forEach((el) =>
+  el.addEventListener('click', () => {
+    const s = groups.find((g) => g.id === el.dataset.id);
+    s.on = !s.on;
+    el.classList.toggle('off', !s.on);
+    el.querySelector('.eye').textContent = s.on ? '表示' : '非表示';
+    for (const m of s.meshes) m.visible = s.on;
+  }));
+
+/* ---------- lecciones ---------- */
+const LESSONS = [
+  { t: '体を切る方向を理解する', run() { setView('overview'); } },
+  { t: '断面から立体を想像する', run() { setView('axial'); } },
+  { t: '同じ臓器を三つの断面で追う', run() {
+      setView('overview');
+      setSlice('axial', Math.floor(series.axial.length * 0.55));
+      setSlice('coronal', Math.floor(series.coronal.length * 0.5));
+      setSlice('sagital', Math.floor(series.sagital.length * 0.5)); } },
+  { t: '大動脈と臓器の関係を見る', run() {
+      setView('overview');
+      for (const g of groups) { g.on = true; for (const m of g.meshes) m.visible = true; }
+      for (const m of orgMeshes) m.material.opacity = 0.35;
+      const ao = groups.find((g) => g.label.includes('大動脈'));
+      if (ao) ao.meshes[0].material.opacity = 1;
+      orbit.dist = radius * 2.0; } },
+];
+$('lessons').innerHTML = LESSONS.map((l, i) =>
+  `<div class="lesson" data-i="${i}"><span class="n">${'０１２３４'[i + 1] || i + 1}</span>${l.t}</div>`).join('');
+document.querySelectorAll('.lesson').forEach((el) =>
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.lesson').forEach((x) => x.classList.toggle('on', x === el));
+    for (const m of orgMeshes) m.material.opacity = 0.96;
+    LESSONS[Number(el.dataset.i)].run();
+  }));
 
 /* ---------- cámara ---------- */
-const orbit = { az: 0.9, el: 0.1, dist: radius * 2.6, target: new THREE.Vector3() };
-const cur = { az: orbit.az, el: orbit.el, dist: orbit.dist, target: orbit.target.clone() };
-function applyCamera() {
-  const ce = Math.cos(cur.el);
-  camera.position.set(
-    cur.target.x + cur.dist * ce * Math.sin(cur.az),
-    cur.target.y + cur.dist * Math.sin(cur.el),
-    cur.target.z + cur.dist * ce * Math.cos(cur.az));
-  camera.lookAt(cur.target);
-}
-function dampCamera(dt) {
-  const k = 1 - Math.exp(-dt * 9);
-  cur.az += (orbit.az - cur.az) * k; cur.el += (orbit.el - cur.el) * k;
-  cur.dist += (orbit.dist - cur.dist) * k; cur.target.lerp(orbit.target, k);
-  applyCamera();
-}
-const canvas = $('gl');
+const dist0 = radius * 2.9;
+const orbit = { az: 0.7, el: 0.25, dist: dist0, target: new THREE.Vector3() };
+const cur = { az: 0.7, el: 0.25, dist: dist0, target: new THREE.Vector3() };
+const cv = renderer.domElement;
 let dragging = false, lastX = 0, lastY = 0;
-canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener('pointerup', (e) => { dragging = false; canvas.releasePointerCapture(e.pointerId); });
-canvas.addEventListener('pointermove', (e) => {
+cv.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY;
+  try { cv.setPointerCapture(e.pointerId); } catch {} });
+cv.addEventListener('pointerup', (e) => { dragging = false; try { cv.releasePointerCapture(e.pointerId); } catch {} });
+cv.addEventListener('pointermove', (e) => {
   if (!dragging) return;
   orbit.az -= (e.clientX - lastX) * 0.006;
-  orbit.el = Math.max(-1.2, Math.min(1.2, orbit.el + (e.clientY - lastY) * 0.006));
+  orbit.el = Math.max(-1.25, Math.min(1.45, orbit.el + (e.clientY - lastY) * 0.006));
   lastX = e.clientX; lastY = e.clientY;
 });
-canvas.addEventListener('wheel', (e) => { e.preventDefault(); stepLevel(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orbit.dist = Math.max(radius * 0.6, Math.min(radius * 6, orbit.dist * Math.exp(e.deltaY * 0.0017)));
+}, { passive: false });
+$('zin').addEventListener('click', () => { orbit.dist = Math.max(radius * 0.6, orbit.dist * 0.8); });
+$('zout').addEventListener('click', () => { orbit.dist = Math.min(radius * 6, orbit.dist * 1.25); });
 
-/* ---------- estudio local (cortes axiales reales) o esquema ---------- */
-let axialReal = null;
-try {
-  const idx = await fetch('../../media/rm-axial/index.json', { cache: 'no-store' })
-    .then((r) => r.ok ? r.json() : null);
-  if (idx?.files?.length) axialReal = idx.files;
-} catch {}
-$('axSrc').textContent = axialReal ? 'RM axial local' : 'esquema didáctico';
-$('axFoot').textContent = axialReal
-  ? 'Estudio personal detectado en este equipo (no forma parte del repo). Mapeo nivel→corte aproximado.'
-  : 'Sin estudio local: se muestra el esquema. Con una RM axial en media/rm-axial/ aparecerían los cortes reales.';
-
-function axialSchematic(lvl) {
-  const disco = LEVELS.find((L) => L.id === lvl)?.tipo === 'disco';
-  return `<svg viewBox="0 0 200 200" width="86%">
-    <ellipse cx="100" cy="112" rx="58" ry="44" fill="${disco ? '#C98A4B' : '#D8D2C4'}" stroke="#4B5563"/>
-    <circle cx="100" cy="78" r="14" fill="#1F2937" stroke="#6B7280"/>
-    <circle cx="100" cy="78" r="9" fill="#E5E7EB" opacity="0.9"/>
-    <ellipse cx="64" cy="60" rx="9" ry="16" fill="#B8B2A4" transform="rotate(30 64 60)"/>
-    <ellipse cx="136" cy="60" rx="9" ry="16" fill="#B8B2A4" transform="rotate(-30 136 60)"/>
-    <rect x="94" y="30" width="12" height="26" rx="5" fill="#B8B2A4"/>
-    <text x="100" y="118" text-anchor="middle" font-family="monospace" font-size="13" fill="#111827">${lvl}</text>
-    <text x="100" y="190" text-anchor="middle" font-family="monospace" font-size="8" fill="#6B7280">cuerpo ${disco ? 'discal' : 'vertebral'} · canal · apófisis</text>
-  </svg>`;
-}
-
-/* ---------- diagrama SVG lateral ---------- */
-const NS = 'http://www.w3.org/2000/svg';
-{
-  const svg = $('diag');
-  let y = 10;
-  for (const L of LEVELS) {
-    const g = document.createElementNS(NS, 'g');
-    g.setAttribute('class', 'lvl'); g.dataset.lvl = L.id;
-    if (L.tipo === 'vertebra') {
-      const r = document.createElementNS(NS, 'rect');
-      r.setAttribute('x', 22); r.setAttribute('y', y); r.setAttribute('width', 46); r.setAttribute('height', 26);
-      r.setAttribute('rx', 6); r.setAttribute('fill', '#E6E0D2'); r.setAttribute('stroke', '#B9B2A2');
-      const sp = document.createElementNS(NS, 'path');   // apófisis espinosa
-      sp.setAttribute('d', `M68 ${y + 8} L86 ${y + 14} L68 ${y + 20} Z`);
-      sp.setAttribute('fill', '#D6CFBE');
-      g.append(r, sp);
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('x', 45); t.setAttribute('y', y + 17); t.setAttribute('text-anchor', 'middle');
-      t.textContent = L.id; g.append(t);
-      y += 28;
-    } else if (L.tipo === 'disco') {
-      const e = document.createElementNS(NS, 'ellipse');
-      e.setAttribute('cx', 45); e.setAttribute('cy', y + 5); e.setAttribute('rx', 24); e.setAttribute('ry', 5);
-      e.setAttribute('fill', '#D9A05E'); e.setAttribute('stroke', '#B27C3E');
-      g.append(e);
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('x', 45); t.setAttribute('y', y + 8); t.setAttribute('text-anchor', 'middle');
-      t.textContent = L.id; g.append(t);
-      y += 12;
-    } else {
-      const p = document.createElementNS(NS, 'path');
-      p.setAttribute('d', `M25 ${y} L65 ${y} L52 ${y + 40} L38 ${y + 40} Z`);
-      p.setAttribute('fill', '#E6E0D2'); p.setAttribute('stroke', '#B9B2A2');
-      g.append(p);
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('x', 45); t.setAttribute('y', y + 22); t.setAttribute('text-anchor', 'middle');
-      t.textContent = L.id; g.append(t);
-      y += 44;
-    }
-    g.addEventListener('click', () => setLevel(L.id));
-    svg.appendChild(g);
-  }
-  svg.setAttribute('viewBox', `0 0 100 ${y + 6}`);
-}
-
-/* ---------- sincronización de los tres paneles ---------- */
-let current = 'L5-S1';
-function setLevel(id) {
-  current = id;
-  // diagrama
-  document.querySelectorAll('.lvl').forEach((g) => g.classList.toggle('on', g.dataset.lvl === id));
-  // 3D: resaltar nivel + mover plano + cámara
-  for (const m of meshes) {
-    if (m.userData.lvl === id) m.material.color.copy(m.userData.baseColor).offsetHSL(0, 0.25, -0.05).lerp(new THREE.Color(0x2563EB), 0.45);
-    else m.material.color.copy(m.userData.baseColor);
-  }
-  const yy = levelY.get(id) ?? 0;
-  plane.position.y = planeEdge.position.y = yy;
-  orbit.target.set(0, yy, 0);
-  orbit.dist = radius * 1.5;
-  // corte
-  $('axLvl').textContent = id;
-  const host = $('axHost');
-  if (axialReal) {
-    const t = (yTop - yy) / (yTop - yBot);          // 0 arriba → 1 abajo
-    const i = Math.round(t * (axialReal.length - 1));
-    host.innerHTML = `<img src="../../media/rm-axial/${axialReal[i]}" alt="corte axial ${id}">`;
-  } else {
-    host.innerHTML = axialSchematic(id);
-  }
-  const L = LEVELS.find((x) => x.id === id);
-  $('readout').innerHTML = `<b>${id}</b> — ${L.tipo}` +
-    (NOTAS[id] ? ` · ${NOTAS[id]}` : '') +
-    ` <span style="color:var(--faint)">· rueda para cambiar de nivel</span>`;
-}
-function stepLevel(d) {
-  const i = LEVELS.findIndex((L) => L.id === current);
-  const j = Math.max(0, Math.min(LEVELS.length - 1, i + d));
-  if (j !== i) setLevel(LEVELS[j].id);
-}
-addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowDown') stepLevel(1);
-  if (e.key === 'ArrowUp') stepLevel(-1);
-});
-
-/* ---------- bucle ---------- */
 function fit() {
-  const r = canvas.parentElement.getBoundingClientRect();
+  const r = cv.parentElement.getBoundingClientRect();
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   renderer.setSize(r.width, r.height, false);
   camera.aspect = r.width / r.height;
   camera.updateProjectionMatrix();
-  applyCamera();
 }
 addEventListener('resize', fit);
 let lastT = performance.now();
 function loop() {
   requestAnimationFrame(loop);
   const now = performance.now();
-  dampCamera(Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const k = 1 - Math.exp(-dt * 9);
+  cur.az += (orbit.az - cur.az) * k; cur.el += (orbit.el - cur.el) * k;
+  cur.dist += (orbit.dist - cur.dist) * k; cur.target.lerp(orbit.target, k);
+  const ce = Math.cos(cur.el);
+  camera.position.set(
+    cur.target.x + cur.dist * ce * Math.sin(cur.az),
+    cur.target.y + cur.dist * Math.sin(cur.el),
+    cur.target.z + cur.dist * ce * Math.cos(cur.az));
+  camera.lookAt(cur.target);
+  $('zpct').textContent = Math.round(100 * dist0 / cur.dist) + '%';
   renderer.render(scene, camera);
 }
 fit();
-setLevel('L5-S1');
+setView('overview');
 $('loading').remove();
 loop();
 </script>
