@@ -14,14 +14,29 @@
   body { margin: 0; background: #FAFAFB; color: var(--ink); font-family: var(--sans);
          font-size: 13px; overflow: hidden; }
   .stage { position: fixed; inset: 0; }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  /* pantalla dividida como el video: camara en vivo | 3D */
+  .cam { position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: #0E1014;
+         overflow: hidden; }
+  .cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .cam .off { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+              align-items: center; justify-content: center; color: #8B93A5;
+              font-family: var(--mono); font-size: 11px; text-align: center; padding: 0 40px; }
+  .cam .off button { border: 1px solid #333B4C; background: #171B23; color: #E8EAF0;
+                     border-radius: 9px; padding: 8px 16px; cursor: pointer; font-size: 12px; }
+  .cam .tag { position: absolute; top: 12px; right: 14px; font-family: var(--mono);
+              font-size: 9.5px; letter-spacing: 0.12em; color: #cfd6e4;
+              background: rgba(14,16,20,0.55); border-radius: 7px; padding: 4px 9px; }
+  canvas { display: block; position: absolute; left: 50%; top: 0; width: 50%; height: 100%;
+           touch-action: none; cursor: grab; }
 
+  /* el header vive sobre la mitad oscura de camara: texto claro */
   .hdr { position: absolute; top: 18px; left: 24px; z-index: 3; pointer-events: none; }
   .eyebrow { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
-             letter-spacing: 0.14em; color: var(--faint); }
-  .hdr h1 { margin: 3px 0 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
-  .hdr .meta { font-size: 11px; color: var(--mut); }
-  .hdr .meta a { color: var(--mut); pointer-events: auto; }
+             letter-spacing: 0.14em; color: #7d8598; }
+  .hdr h1 { margin: 3px 0 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em;
+            color: #E8EAF0; }
+  .hdr .meta { font-size: 11px; color: #9aa2b4; }
+  .hdr .meta a { color: #9aa2b4; pointer-events: auto; }
 
   .panel { position: absolute; top: 88px; left: 24px; width: 270px; z-index: 3;
     max-height: calc(100dvh - 120px); overflow-y: auto;
@@ -66,6 +81,15 @@
 </style>
 
 <div class="stage">
+  <div class="cam">
+    <video id="camv" autoplay playsinline muted></video>
+    <div class="off" id="camoff">
+      <div>La mitad izquierda es tu cámara, como en el video original.<br>
+        Todo queda en el navegador — no se graba ni se sube nada.</div>
+      <button id="camBtn">Encender cámara</button>
+    </div>
+    <div class="tag">CAMARA · EN VIVO</div>
+  </div>
   <canvas id="gl"></canvas>
 
   <header class="hdr">
@@ -176,7 +200,7 @@ const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
 
 /* ---------- cámara ---------- */
 /* vista posterior por defecto, como el video */
-const orbit = { az: Math.PI, el: 0.12, dist: radius * 2.7, target: new THREE.Vector3(0, 0.04, 0) };
+const orbit = { az: Math.PI, el: 0.12, dist: radius * 3.4, target: new THREE.Vector3(0, 0.04, 0) };
 const cur = { ...orbit, target: orbit.target.clone() };
 function applyCamera() {
   const ce = Math.cos(cur.el);
@@ -319,8 +343,21 @@ function update() {
 }
 
 /* ---------- bucle ---------- */
+/* camara en vivo (local, nada sale del navegador) */
+async function startCam() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    document.getElementById('camv').srcObject = stream;
+    document.getElementById('camoff').style.display = 'none';
+  } catch {
+    document.getElementById('camoff').querySelector('div').textContent =
+      'Sin permiso de cámara — la mitad izquierda queda en espera. El 3D funciona igual.';
+  }
+}
+document.getElementById('camBtn').addEventListener('click', startCam);
+
 function fit() {
-  const r = canvas.parentElement.getBoundingClientRect();
+  const r = canvas.getBoundingClientRect();
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   renderer.setSize(r.width, r.height, false);
   camera.aspect = r.width / r.height;
