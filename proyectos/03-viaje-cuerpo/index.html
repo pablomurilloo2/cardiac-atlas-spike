@@ -1,39 +1,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>El torrente — un viaje por el cuerpo</title>
+<title>The bloodstream — a journey through the body</title>
 
 <style>
   :root {
-    --cream: #F4EFE6; --ink: #241E14; --mut: #8A7E6A; --faint: #A89C88;
+    --cream: #F2EDE4; --ink: #241E14; --mut: #8A7E6A; --faint: #A89C88;
     --mono: ui-monospace, Menlo, monospace;
     --serif: Georgia, "Times New Roman", serif;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--cream); color: var(--ink); overflow: hidden;
          font-family: var(--serif); }
-  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%;
-           cursor: pointer; }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; cursor: pointer; }
 
-  .titles { position: fixed; left: 50%; top: 11%; transform: translateX(-50%); z-index: 3;
-            text-align: center; pointer-events: none; max-width: 640px; width: 90%; }
-  .titles .ey { font: 9.5px var(--mono); letter-spacing: 0.26em; color: var(--faint);
-                text-transform: uppercase; margin-bottom: 12px; opacity: 0;
-                transition: opacity 1.2s ease; }
-  .titles h1 { margin: 0; font: italic 600 46px/1.08 var(--serif); letter-spacing: -0.01em;
-               opacity: 0; transition: opacity 1.2s ease, transform 1.2s ease;
-               transform: translateY(8px); }
-  .titles p { margin: 12px 0 0; font: italic 16px/1.6 var(--serif); color: var(--mut);
-              opacity: 0; transition: opacity 1.2s ease 0.25s; }
-  .titles.show .ey, .titles.show h1, .titles.show p { opacity: 1; }
-  .titles.show h1 { transform: none; }
+  /* titulo abajo-izquierda, como el original */
+  .titles { position: fixed; left: 44px; bottom: 64px; z-index: 3; pointer-events: none;
+            max-width: 520px; }
+  .titles h1 { margin: 0; font: 400 44px/1.05 var(--serif); letter-spacing: 0.01em;
+               opacity: 0; transition: opacity 1.4s ease; }
+  .titles p { margin: 8px 0 0 2px; font: italic 13px/1.5 var(--serif); color: var(--mut);
+              opacity: 0; transition: opacity 1.4s ease 0.3s; }
+  .titles.show h1, .titles.show p { opacity: 1; }
 
-  .corner { position: fixed; top: 18px; left: 22px; z-index: 3; font: 10px var(--mono);
+  .corner { position: fixed; top: 16px; left: 22px; z-index: 3; font: 10px var(--mono);
             letter-spacing: 0.08em; color: var(--faint); }
   .corner a { color: var(--faint); }
-  .credit { position: fixed; bottom: 16px; right: 20px; z-index: 3; font: 9px var(--mono);
+  .credit { position: fixed; bottom: 14px; right: 18px; z-index: 3; font: 9px var(--mono);
             color: var(--faint); text-align: right; line-height: 1.6; }
-  .hint { position: fixed; bottom: 16px; left: 22px; z-index: 3; font: 10px var(--mono);
-          letter-spacing: 0.08em; color: var(--faint); transition: opacity 0.6s ease; }
+  .hint { position: fixed; top: 16px; right: 22px; z-index: 3; font: 10px var(--mono);
+          letter-spacing: 0.08em; color: var(--faint); }
   .progress { position: fixed; left: 0; right: 0; bottom: 0; height: 2px; z-index: 3;
               background: rgba(36,30,20,0.08); }
   .progress i { display: block; height: 100%; width: 0; background: #A6403D; }
@@ -43,134 +38,157 @@
 
 <canvas id="gl"></canvas>
 
-<div class="titles" id="titles">
-  <div class="ey">A journey through the body</div>
-  <h1 id="tT"></h1>
-  <p id="tB"></p>
-</div>
+<div class="titles" id="titles"><h1 id="tT"></h1><p id="tB"></p></div>
 <div class="corner">PROYECTO 03 · <a href="../">← proyectos</a> ·
   <a href="https://x.com/ZentrixHQ/status/2099051720298922284" target="_blank" rel="noreferrer">fuente ↗</a></div>
-<div class="hint" id="hint">CLIC PARA PAUSAR · RUEDA PARA ACERCAR</div>
-<div class="credit">BodyParts3D © DBCLS · CC BY 4.0<br>1.066 vasos · anatomía de referencia</div>
+<div class="hint" id="hint">CLICK TO PAUSE</div>
+<div class="credit">BodyParts3D © DBCLS · CC BY 4.0<br>procedural blood · 90 s loop</div>
 <div class="progress"><i id="bar"></i></div>
-<div class="loading" id="loading">preparando el torrente…</div>
+<div class="loading" id="loading">entering the bloodstream…</div>
 
 <script type="module">
 import * as THREE from '../../vendor/three.module.min.js';
 const $ = (id) => document.getElementById(id);
 
-const COLORS = { arterial: '#A6403D', venous: '#47609F', cardiac: '#C69B92', integumentary: '#E7DDD6' };
-
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
-renderer.setClearColor(0xF4EFE6, 1);
+renderer.setClearColor(0xF2EDE4, 1);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, 1, 0.005, 12);
+scene.fog = new THREE.Fog(0xF2EDE4, 2.2, 7.5);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 40);
 const key = new THREE.DirectionalLight(0xFFF6E8, 1.5); key.position.set(3, 4, 3);
-const rim = new THREE.DirectionalLight(0xD8E2F4, 0.6); rim.position.set(-4, 1, -3);
-scene.add(key, rim, new THREE.HemisphereLight(0xFFFFFF, 0x9A8F7C, 0.85), new THREE.AmbientLight(0xffffff, 0.28));
-const root = new THREE.Group(); scene.add(root);
+const rim = new THREE.DirectionalLight(0xD8E2F4, 0.55); rim.position.set(-4, 1, -3);
+scene.add(key, rim, new THREE.HemisphereLight(0xFFFFFF, 0x9A8F7C, 0.9), new THREE.AmbientLight(0xffffff, 0.3));
 
-const manifest = await fetch('../../body-subset.json').then((r) => r.json());
-$('loading').textContent = 'preparando 1.066 vasos…';
-const bin = await fetch('../../body-subset.bin').then((r) => r.arrayBuffer());
-
-const bySystem = { arterial: [], venous: [], cardiac: [], integumentary: [] };
-const bbox = new THREE.Box3();
-for (const p of manifest.parts) {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
-  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
-  g.computeBoundingSphere();
-  const skin = p.system === 'integumentary';
-  const mat = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(COLORS[p.system]),
-    roughness: skin ? 0.85 : 0.42, metalness: 0.02,
-    clearcoat: skin ? 0 : 0.45, clearcoatRoughness: 0.3,
-    transparent: true, opacity: 0, depthWrite: false });
-  const mesh = new THREE.Mesh(g, mat);
-  mesh.renderOrder = skin ? 2 : 1;
-  root.add(mesh);
-  bySystem[p.system].push(mesh);
-  if (!skin) bbox.expandByObject(mesh);
+/* ================= escena 1: el torrente (procedural) ================= */
+const blood = new THREE.Group(); scene.add(blood);
+/* globulo rojo biconcavo por revolucion */
+const prof = [];
+for (const [x, y] of [[0.001, -0.09], [0.35, -0.06], [0.62, -0.13], [0.85, -0.20],
+                      [1.0, 0], [0.85, 0.20], [0.62, 0.13], [0.35, 0.06], [0.001, 0.09]])
+  prof.push(new THREE.Vector2(x, y));
+const rbcGeo = new THREE.LatheGeometry(prof, 36);
+rbcGeo.computeVertexNormals();
+const rbcMat = new THREE.MeshPhysicalMaterial({
+  color: new THREE.Color('#B23A34'), roughness: 0.52, metalness: 0.02,
+  clearcoat: 0.35, clearcoatRoughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color('#E58A80') });
+const RBC_N = 110;
+const rbcs = [];
+for (let i = 0; i < RBC_N; i++) {
+  const m = new THREE.Mesh(rbcGeo, rbcMat);
+  const s = 0.11 + (i % 7) * 0.012;
+  m.scale.setScalar(s);
+  m.position.set(((i * 37) % 100 / 50 - 1) * 2.6, ((i * 53) % 100 / 50 - 1) * 1.6,
+                 -((i * 71) % 100 / 100) * 9 - 0.4);
+  m.rotation.set((i * 1.7) % 6.28, (i * 2.3) % 6.28, (i * 3.1) % 6.28);
+  m.userData = { w: 0.12 + (i % 5) * 0.05, drift: 0.05 + (i % 4) * 0.03, ph: i * 0.61 };
+  blood.add(m); rbcs.push(m);
 }
-const center = bbox.getCenter(new THREE.Vector3());
-root.position.sub(center);
-const radius = bbox.getSize(new THREE.Vector3()).length() / 2;
-const heartC = (() => {
-  const c = new THREE.Vector3();
-  for (const m of bySystem.cardiac) c.add(m.geometry.boundingSphere.center);
-  return c.divideScalar(bySystem.cardiac.length).sub(center);
-})();
-const topY = bbox.max.y - center.y, botY = bbox.min.y - center.y;
+/* algunas plaquetas y globulos blancos */
+const wbcMat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color('#E8DFD2'),
+  roughness: 0.7, clearcoat: 0.2 });
+for (let i = 0; i < 7; i++) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 16), wbcMat);
+  m.position.set(((i * 41) % 100 / 50 - 1) * 2.4, ((i * 67) % 100 / 50 - 1) * 1.4, -i * 1.35 - 0.8);
+  m.userData = { w: 0.1, drift: 0.06, ph: i };
+  blood.add(m); rbcs.push(m);
+}
 
-/* ---------- guion: keyframes del viaje (t en segundos) ---------- */
-/* op = opacidades destino por sistema; el azimut gira continuo aparte */
-const KF = [
-  { t: 0,  el: 0.06, dist: 0.34, ty: heartC.y, op: { cardiac: 1, arterial: 0, venous: 0, integumentary: 0 },
-    T: 'El corazón', B: '— donde empieza la corriente. Late unas 100.000 veces al día.' },
-  { t: 10, el: 0.10, dist: 0.42, ty: heartC.y, op: { cardiac: 1, arterial: 0.25, venous: 0, integumentary: 0 } },
-  { t: 14, el: 0.12, dist: 0.85, ty: heartC.y * 0.6, op: { cardiac: 1, arterial: 1, venous: 0, integumentary: 0 },
-    T: 'El torrente', B: '— un viaje llevado por una sola corriente: sangre a presión hacia cada rincón.' },
-  { t: 24, el: 0.02, dist: 1.05, ty: botY * 0.45, op: { cardiac: 1, arterial: 1, venous: 0, integumentary: 0 } },
-  { t: 30, el: -0.04, dist: 0.8, ty: botY * 0.62, op: { cardiac: 0.9, arterial: 1, venous: 0.15, integumentary: 0 } },
-  { t: 34, el: 0.02, dist: 0.95, ty: botY * 0.4, op: { cardiac: 0.9, arterial: 0.22, venous: 1, integumentary: 0 },
-    T: 'El retorno', B: '— el camino de vuelta: las venas recogen la corriente y la devuelven al corazón.' },
-  { t: 46, el: 0.14, dist: 0.6, ty: heartC.y * 0.9, op: { cardiac: 1, arterial: 0.22, venous: 1, integumentary: 0 } },
-  { t: 52, el: 0.10, dist: 1.55, ty: heartC.y * 0.25, op: { cardiac: 1, arterial: 1, venous: 1, integumentary: 0.075 },
-    T: 'El sistema entero', B: '— unos 100.000 km de vasos dentro de una sola silueta humana.' },
-  { t: 68, el: 0.04, dist: 1.7, ty: 0, op: { cardiac: 1, arterial: 1, venous: 1, integumentary: 0.075 } },
-  { t: 76, el: 0.06, dist: 1.0, ty: heartC.y * 0.8, op: { cardiac: 1, arterial: 0.5, venous: 0.5, integumentary: 0.04 },
-    T: '', B: '' },
-  { t: 82, el: 0.06, dist: 0.36, ty: heartC.y, op: { cardiac: 1, arterial: 0, venous: 0, integumentary: 0 } },
+/* ================= escenas de anatomia real ================= */
+const man = await fetch('../../anatomy-full.json').then((r) => r.json());
+$('loading').textContent = 'building heart, lungs, muscles, nerves…';
+const bin = await fetch('../../anatomy-full.bin').then((r) => r.arrayBuffer());
+
+function buildGroup(filter, matOpts, limit = 4000) {
+  const g = new THREE.Group();
+  let n = 0;
+  const box = new THREE.Box3();
+  for (const p of man.parts) {
+    if (!filter(p) || n >= limit) continue;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bin, p.positions, p.vertexCount * 3), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Int16Array(bin, p.normals, p.vertexCount * 3), 3, true));
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, p.indices, p.indexCount), 1));
+    geo.computeBoundingBox();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+      transparent: true, opacity: 0, depthWrite: false, ...matOpts,
+      color: new THREE.Color(matOpts.color) }));
+    g.add(mesh); box.union(geo.boundingBox); n++;
+  }
+  const c = box.getCenter(new THREE.Vector3());
+  for (const m of g.children) m.position.sub(c);
+  g.userData.radius = box.getSize(new THREE.Vector3()).length() / 2;
+  scene.add(g);
+  g.visible = false;
+  return g;
+}
+const lname = (p) => p.name.toLowerCase();
+/* cardiac trae colados ventriculos CEREBRALES: fuera */
+const gHeart = buildGroup((p) => p.system === 'cardiac' &&
+  !/third ventricle|fourth ventricle|lateral ventricle|interventricular foramen/.test(lname(p)),
+  { color: '#B56A5E', roughness: 0.45, clearcoat: 0.4 });
+/* no hay malla de pulmon: el arbol bronquial completo LOS dibuja */
+const gLungs = buildGroup((p) => p.system === 'respiratory',
+  { color: '#D8A79E', roughness: 0.55, clearcoat: 0.25 });
+const gMusc = buildGroup((p) => p.system === 'muscular' && /(gluteus maximus|quadriceps|rectus femoris|vastus|biceps|triceps|deltoid|pectoralis|latissimus|trapezius|gastrocnemius|sartorius|iliocostalis|longissimus)/.test(lname(p)),
+  { color: '#A65B50', roughness: 0.5, clearcoat: 0.3 });
+const gNerv = buildGroup((p) => p.system === 'nervous' && !/gyrus|white matter|cerebell|lobe/.test(lname(p)),
+  { color: '#C9A44A', roughness: 0.45, clearcoat: 0.4 }, 600);
+const gBody = buildGroup((p) => /^skin$/.test(lname(p)),
+  { color: '#E2D5C4', roughness: 0.8, side: THREE.DoubleSide });
+
+/* ================= guion (90 s) ================= */
+const STAGES = [
+  { t0: 0, t1: 20, group: blood, T: 'The bloodstream', B: 'A journey carried by a single current.',
+    cam(u, tt) { camera.position.set(Math.sin(tt * 0.22) * 0.35, Math.cos(tt * 0.17) * 0.22, 1.6 - u * 2.2);
+                 camera.lookAt(0, 0, camera.position.z - 3); } },
+  { t0: 20, t1: 37, group: gHeart, T: 'The heart', B: 'Every drop returns here, one hundred thousand beats a day.',
+    cam(u, tt) { const r = gHeart.userData.radius * (2.6 - u * 0.7);
+                 const a = 0.6 + tt * 0.1;
+                 camera.position.set(r * Math.sin(a), r * 0.22, r * Math.cos(a));
+                 camera.lookAt(0, 0, 0); } },
+  { t0: 37, t1: 54, group: gLungs, T: 'The lungs', B: 'Twenty thousand breaths, trading air for the current itself.',
+    cam(u, tt) { const r = gLungs.userData.radius * (2.4 - u * 0.5);
+                 const a = -0.4 + tt * 0.09;
+                 camera.position.set(r * Math.sin(a), r * 0.15, r * Math.cos(a));
+                 camera.lookAt(0, 0, 0); } },
+  { t0: 54, t1: 70, group: gMusc, T: 'The muscles', B: 'Six hundred engines, fed by the same river.',
+    cam(u, tt) { const r = gMusc.userData.radius * (1.5 - u * 0.3);
+                 const a = 0.3 + tt * 0.08;
+                 camera.position.set(r * Math.sin(a), r * 0.1, r * Math.cos(a));
+                 camera.lookAt(0, 0, 0); } },
+  { t0: 70, t1: 84, group: gNerv, T: 'The nerves', B: 'The wiring that decides where the current goes next.',
+    cam(u, tt) { const r = gNerv.userData.radius * (1.4 - u * 0.25);
+                 const a = -0.2 + tt * 0.09;
+                 camera.position.set(r * Math.sin(a), r * 0.12, r * Math.cos(a));
+                 camera.lookAt(0, 0, 0); } },
+  { t0: 84, t1: 90, group: gBody, T: 'One body', B: 'The same current, seen from outside.',
+    cam(u, tt) { const r = gBody.userData.radius * 2.1;
+                 const a = 0.5 + tt * 0.07;
+                 camera.position.set(r * Math.sin(a), r * 0.12, r * Math.cos(a));
+                 camera.lookAt(0, 0, 0); } },
 ];
-const DUR = KF[KF.length - 1].t;
-const ease = (x) => x * x * (3 - 2 * x);
-function sample(t) {
-  let i = 0;
-  while (i < KF.length - 2 && KF[i + 1].t <= t) i++;
-  const a = KF[i], b = KF[i + 1];
-  const u = ease(Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))));
-  const L = (x, y) => x + (y - x) * u;
-  const op = {};
-  for (const k in a.op) op[k] = L(a.op[k], b.op[k]);
-  return { el: L(a.el, b.el), dist: L(a.dist, b.dist), ty: L(a.ty, b.ty), op };
-}
-/* titulo activo segun el ultimo keyframe con texto */
+const DUR = 90;
+const FADE = 2.2;
+
 let shownTitle = null;
-function updateTitle(t) {
-  let cur = null;
-  for (const k of KF) if (k.t <= t && k.T !== undefined) cur = k;
-  const id = cur ? cur.T : null;
-  if (id === shownTitle) return;
-  shownTitle = id;
-  if (!cur || !cur.T) { $('titles').classList.remove('show'); return; }
-  $('tT').textContent = cur.T;
-  $('tB').textContent = cur.B;
+function setTitle(T, B) {
+  if (T === shownTitle) return;
+  shownTitle = T;
+  if (!T) { $('titles').classList.remove('show'); return; }
+  $('tT').textContent = T; $('tB').textContent = B;
   $('titles').classList.add('show');
 }
 
-/* ---------- reproduccion ---------- */
-let playing = true, t = 0, zoomBias = 1, hintFade = 0;
+let playing = true, t = 0;
 renderer.domElement.addEventListener('click', () => {
   playing = !playing;
-  $('hint').textContent = playing ? 'CLIC PARA PAUSAR · RUEDA PARA ACERCAR'
-                                  : 'PAUSADO — CLIC PARA SEGUIR · ARRASTRA PARA MIRAR';
+  $('hint').textContent = playing ? 'CLICK TO PAUSE' : 'PAUSED — CLICK TO RESUME';
 });
-renderer.domElement.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  zoomBias = Math.max(0.45, Math.min(2.2, zoomBias * Math.exp(e.deltaY * 0.0015)));
-}, { passive: false });
-/* en pausa se puede mirar alrededor */
-let dragging = false, lastX = 0, lastY = 0, azOff = 0, elOff = 0;
-renderer.domElement.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
-addEventListener('pointerup', () => { dragging = false; });
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (!dragging || playing) return;
-  azOff -= (e.clientX - lastX) * 0.005;
-  elOff = Math.max(-0.9, Math.min(0.9, elOff + (e.clientY - lastY) * 0.004));
-  lastX = e.clientX; lastY = e.clientY;
+/* flechas: saltar por el guion */
+addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') t = (t + 10) % DUR;
+  if (e.key === 'ArrowLeft') t = (t - 10 + DUR) % DUR;
 });
 
 function fit() {
@@ -186,29 +204,49 @@ function loop() {
   requestAnimationFrame(loop);
   const now = performance.now();
   const dtReal = (now - lastNow) / 1000; lastNow = now;
-  const dt = Math.min(0.1, dtReal);   // para lerps estables
-  if (playing) {
-    t = (t + Math.min(1.5, dtReal)) % DUR;   // el guion sigue el reloj real aunque el rAF se acelere o frene
-    azOff *= 0.97; elOff *= 0.97;   // vuelve suave al encuadre del guion
-  }
-  const s = sample(t);
-  updateTitle(t);
+  const dt = Math.min(0.1, dtReal);
+  if (playing) t = (t + Math.min(1.5, dtReal)) % DUR;
   $('bar').style.width = (100 * t / DUR) + '%';
 
-  for (const [k, arr] of Object.entries(bySystem)) {
-    const target = s.op[k];
-    for (const m of arr) m.material.opacity += (target - m.material.opacity) * Math.min(1, dt * 3.5);
+  for (const st of STAGES) {
+    const inStage = t >= st.t0 && t < st.t1;
+    /* opacidad con fundido en bordes de etapa */
+    let target = 0;
+    if (inStage) {
+      const inU = Math.min(1, (t - st.t0) / FADE);
+      const outU = Math.min(1, (st.t1 - t) / FADE);
+      target = Math.min(inU, outU);
+    }
+    const meshes = st.group === blood ? blood.children : st.group.children;
+    let vis = false;
+    for (const m of meshes) {
+      m.material.opacity += (target - m.material.opacity) * Math.min(1, dt * 4);
+      if (m.material.opacity > 0.01) vis = true;
+    }
+    st.group.visible = vis || inStage;
+    if (inStage) {
+      const u = (t - st.t0) / (st.t1 - st.t0);
+      st.cam(u, t);
+      setTitle(st.T, st.B);
+      if (st.group === gHeart) {
+        const beat = 1 + 0.035 * Math.max(0, Math.sin(t * 2 * Math.PI * 64 / 60)) ** 3;
+        gHeart.scale.setScalar(beat);
+      }
+      if (st.group === gLungs) gLungs.scale.setScalar(1 + 0.05 * Math.sin(t * 1.1));
+    }
   }
-  const az = 0.55 + t * 0.085 + azOff;    // giro continuo, nunca se detiene
-  const el = s.el + elOff;
-  const dist = s.dist * radius * zoomBias;
-  const ty = s.ty;
-  const ce = Math.cos(el);
-  camera.position.set(dist * ce * Math.sin(az), ty + dist * Math.sin(el), dist * ce * Math.cos(az));
-  camera.lookAt(0, ty, 0);
+  /* deriva de la sangre */
+  for (const m of rbcs) {
+    const u = m.userData;
+    m.rotation.x += u.w * dt; m.rotation.y += u.w * 0.7 * dt;
+    m.position.z += u.drift * dt * 2.2;
+    m.position.x += Math.sin(t * 0.9 + u.ph) * 0.014 * dt * 10;
+    if (m.position.z > 2.5) m.position.z -= 10;
+  }
   renderer.render(scene, camera);
 }
 fit();
+blood.visible = true;
 $('loading').remove();
 loop();
 </script>
