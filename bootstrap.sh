@@ -6,5 +6,10 @@ set -e
 node extract-cardiac.mjs ../human-atlas .   # corazón + coronarias + venas + grandes vasos
 node extract-body.mjs   ../human-atlas .    # sistema cardiovascular de cuerpo completo
 node extract-all.mjs    ../human-atlas .    # anatomía completa (2.234 mallas)
+
+# human-atlas VERBATIM (proyectos/human-atlas): compilar main sin cambios y copiar sus modelos
+#   (cd ../human-atlas && git worktree add ../human-atlas-main main)
+#   (cd ../human-atlas-main && ln -s ../human-atlas/node_modules node_modules && npx vite build --base=./)
+#   cp -r ../human-atlas-main/dist/models proyectos/human-atlas/models
 echo "OK. Datos personales (condicion.json, media/) NO son parte del repo: son locales."
 echo "Servir con: python3 serve.py  ->  http://localhost:8899"
