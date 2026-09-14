@@ -10,7 +10,10 @@
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
+  body.dark { --ink:#E6E9F1; --mut:#8A92A6; --faint:#5A6174; --panel:rgba(15,18,25,0.92);
+              background:#0A0D14; }
   body { margin: 0; background: #FAFAFB; color: var(--ink); font-family: var(--sans);
+         transition: background 400ms ease;
          font-size: 13px; -webkit-font-smoothing: antialiased; overflow: hidden; }
   .stage { position: fixed; inset: 0; }
   canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
@@ -435,6 +438,35 @@ const N_NEU = 166000;
   root.add(window.__neurons);
 }
 $('neuOn').addEventListener('change', (e) => { window.__neurons.visible = e.target.checked; });
+
+/* ---- modo render: el look del video de Blender, pero navegable ---- */
+(() => {
+  const lbl = document.createElement('label');
+  lbl.className = 'tg';
+  lbl.innerHTML = '<input type="checkbox" id="darkMode"> <span>Modo render (oscuro)</span>';
+  const neuLbl = $('neuOn').closest('label');
+  neuLbl.parentElement.insertBefore(lbl, neuLbl);
+  const BLUE = new THREE.Color('#7FA0CC');
+  document.getElementById('darkMode').addEventListener('change', (e) => {
+    const on = e.target.checked;
+    document.body.classList.toggle('dark', on);
+    renderer.setClearColor(on ? 0x0A0D14 : 0xFAFAFB, 1);
+    for (const m of meshes) {
+      m.material.color.copy(on ? BLUE : m.userData.baseColor);
+      m.material.opacity = on ? 0.15 : $('regT').value / 100;
+    }
+    const attr = window.__neurons.geometry.getAttribute('color');
+    window.__neuColOrig ??= attr.array.slice();
+    if (on) {
+      for (let i = 0; i < attr.array.length; i += 3) {
+        attr.array[i] = 0.68; attr.array[i+1] = 0.86; attr.array[i+2] = 1.0;
+      }
+    } else attr.array.set(window.__neuColOrig);
+    attr.needsUpdate = true;
+    window.__neurons.material.size = on ? 0.0013 : 0.0009;
+    if (window.__neuU) window.__neuU.uAct.value = on ? 0.75 : $('neuAct').value / 100;
+  });
+})();
 $('neuAct').addEventListener('input', (e) => { if (window.__neuU) window.__neuU.uAct.value = e.target.value / 100; });
 $('regT').addEventListener('input', (e) => {
   const o = e.target.value / 100;
