@@ -124,6 +124,14 @@ fetch('../../media/rm-mpr/volume.json').then((r) => {
     const o = document.createElement('option');
     o.value = 'rm'; o.textContent = 'Mi RM lumbar (local)';
     $('dataset').appendChild(o);
+    /* hazla visible: resalta el selector y avisa */
+    const sel = $('dataset');
+    sel.style.borderColor = '#E8B34A'; sel.style.color = '#E8B34A';
+    const tip = document.createElement('span');
+    tip.textContent = '← tu RM está aquí';
+    tip.style.cssText = 'font:10px ui-monospace,Menlo,monospace;color:#E8B34A;margin-left:6px';
+    sel.parentElement.appendChild(tip);
+    setTimeout(() => { tip.remove(); sel.style.color = ''; }, 12000);
   }
 });
 let { meta, buf } = first;
