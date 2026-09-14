@@ -13,19 +13,19 @@ OUT = pathlib.Path(__file__).parent / 'proyectos/04-estudio-espacial/data'
 
 # etiqueta japonesa (como el visor del video) + color por organo
 ORGANS = [
-    ('liver', '肝臓', '#C97B4A'),
-    ('stomach', '胃', '#E0A88A'),
-    ('kidney_left', '左腎', '#9E4C4C'),
-    ('kidney_right', '右腎', '#9E4C4C'),
-    ('spleen', '脾臓', '#7E4A6B'),
-    ('pancreas', '膵臓', '#D9B26A'),
-    ('gallbladder', '胆嚢', '#6B8E4A'),
-    ('aorta', '大動脈', '#C0392B'),
-    ('inferior_vena_cava', '下大静脈', '#4A6BAA'),
-    ('portal_vein_and_splenic_vein', '門脈', '#5A7BC0'),
-    ('colon', '結腸', '#C9A46B'),
-    ('small_bowel', '小腸', '#D9B896'),
-    ('urinary_bladder', '膀胱', '#B0895A'),
+    ('liver', 'Liver', '#C97B4A'),
+    ('stomach', 'Stomach', '#E0A88A'),
+    ('kidney_left', 'Left kidney', '#9E4C4C'),
+    ('kidney_right', 'Right kidney', '#9E4C4C'),
+    ('spleen', 'Spleen', '#7E4A6B'),
+    ('pancreas', 'Pancreas', '#D9B26A'),
+    ('gallbladder', 'Gallbladder', '#6B8E4A'),
+    ('aorta', 'Aorta', '#C0392B'),
+    ('inferior_vena_cava', 'Inferior vena cava', '#4A6BAA'),
+    ('portal_vein_and_splenic_vein', 'Portal vein', '#5A7BC0'),
+    ('colon', 'Colon', '#C9A46B'),
+    ('small_bowel', 'Small bowel', '#D9B896'),
+    ('urinary_bladder', 'Bladder', '#B0895A'),
 ]
 
 
