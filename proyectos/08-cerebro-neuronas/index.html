@@ -425,17 +425,45 @@ const N_NEU = 166000;
     blending: THREE.AdditiveBlending });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = { value: 0 }; sh.uniforms.uAct = { value: 0.35 };
+    sh.uniforms.uWaves = { value: new Float32Array(8 * 4) };   // 8 impulsos: xyz origen + t0
     window.__neuU = sh.uniforms;
-    sh.vertexShader = 'attribute float aPhase;\nvarying float vPh;\nuniform float uTime;\n' +
-      sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvPh = aPhase;');
-    sh.fragmentShader = 'varying float vPh;\nuniform float uTime;\nuniform float uAct;\n' +
+    sh.vertexShader = 'attribute float aPhase;\nvarying float vPh;\nvarying float vBoost;\n' +
+      'uniform float uTime;\nuniform vec4 uWaves[8];\n' +
+      sh.vertexShader.replace('#include <begin_vertex>',
+        `#include <begin_vertex>
+vPh = aPhase;
+float b = 0.0;
+for (int i = 0; i < 8; i++) {
+  float dtw = uTime - uWaves[i].w;
+  if (dtw > 0.0 && dtw < 2.2 && uWaves[i].w > 0.0) {
+    float d = distance(position, uWaves[i].xyz);
+    float front = dtw * 0.085;               // velocidad del impulso
+    float x = (d - front) / 0.012;           // grosor del frente
+    b += exp(-x * x) * exp(-dtw * 1.4);
+  }
+}
+vBoost = b;`);
+    sh.fragmentShader = 'varying float vPh;\nvarying float vBoost;\nuniform float uTime;\nuniform float uAct;\n' +
       sh.fragmentShader.replace('vec4 diffuseColor = vec4( diffuse, opacity );',
         'float tw = 0.55 + 0.45 * sin(uTime * (1.5 + uAct * 6.0) + vPh);\n' +
-        'vec4 diffuseColor = vec4( diffuse * mix(0.35, 1.6, tw * uAct + (1.0 - uAct) * 0.5), opacity );');
+        'float base = mix(0.35, 1.6, tw * uAct + (1.0 - uAct) * 0.5);\n' +
+        'vec4 diffuseColor = vec4( diffuse * (base + vBoost * 4.5), opacity );');
   };
   window.__neurons = new THREE.Points(g, mat);
   window.__neurons.frustumCulled = false;
   root.add(window.__neurons);
+  /* impulsos: cada ~0.4s nace una senal en una neurona al azar y se propaga */
+  window.__neuPos = pos;
+  let slot = 0;
+  window.__fireWave = () => {
+    if (!window.__neuU || !window.__neurons.visible) return;
+    const i = (Math.random() * N_NEU | 0) * 3;
+    const w = window.__neuU.uWaves.value;
+    w[slot*4] = pos[i]; w[slot*4+1] = pos[i+1]; w[slot*4+2] = pos[i+2];
+    w[slot*4+3] = performance.now() / 1000;
+    slot = (slot + 1) % 8;
+  };
+  setInterval(() => { const n = 1 + (Math.random() * 2 | 0); for (let j = 0; j < n; j++) window.__fireWave(); }, 420);
 }
 $('neuOn').addEventListener('change', (e) => { window.__neurons.visible = e.target.checked; });
 
@@ -447,13 +475,39 @@ $('neuOn').addEventListener('change', (e) => { window.__neurons.visible = e.targ
   const neuLbl = $('neuOn').closest('label');
   neuLbl.parentElement.insertBefore(lbl, neuLbl);
   const BLUE = new THREE.Color('#7FA0CC');
+  /* clasifica cada pieza: corteza translucida vs estructuras profundas con color propio */
+  const CLS = [
+    ['ventricle',        /ventricle|aqueduct/i,                    '#7FD8E8', 0.9],
+    ['callosum',         /corpus callosum/i,                       '#E8C46B', 0.92],
+    ['fornix',           /fornix|commissure/i,                     '#D8906B', 0.9],
+    ['thalamus',         /thalam/i,                                '#C86FA8', 0.92],
+    ['hippocampus',      /hippocamp|amygdal/i,                     '#6FC8A8', 0.92],
+    ['basal',            /caudate|putamen|pallidus|accumbens/i,    '#6F9FE8', 0.92],
+    ['brainstem',        /midbrain|pons|medulla|peduncle/i,        '#E8A46B', 0.6],
+    ['cerebellum',       /cerebell/i,                              '#B87F98', 0.38],
+    ['cortex',           /gyrus|white matter|hemisphere|insula|operculum|precuneus|cuneus|paracentral|lobe/i, '#5A7FB0', 0.05],
+  ];
+  for (const m of meshes) {
+    const hit = CLS.find(([, rx]) => rx.test(m.userData.part.name)) || CLS[CLS.length - 1];
+    m.userData.cls = hit[0];
+    m.userData.clsColor = new THREE.Color(hit[2]);
+    m.userData.clsOpacity = hit[3];
+  }
   document.getElementById('darkMode').addEventListener('change', (e) => {
     const on = e.target.checked;
     document.body.classList.toggle('dark', on);
     renderer.setClearColor(on ? 0x0A0D14 : 0xFAFAFB, 1);
     for (const m of meshes) {
-      m.material.color.copy(on ? BLUE : m.userData.baseColor);
-      m.material.opacity = on ? 0.15 : $('regT').value / 100;
+      if (on) {
+        m.material.color.copy(m.userData.clsColor);
+        m.material.opacity = m.userData.clsOpacity;
+        m.material.emissive.copy(m.userData.clsColor)
+          .multiplyScalar(m.userData.cls === 'cortex' ? 0.0 : 0.5);
+      } else {
+        m.material.color.copy(m.userData.baseColor);
+        m.material.emissive.setRGB(0, 0, 0);
+        m.material.opacity = $('regT').value / 100;
+      }
     }
     const attr = window.__neurons.geometry.getAttribute('color');
     window.__neuColOrig ??= attr.array.slice();
