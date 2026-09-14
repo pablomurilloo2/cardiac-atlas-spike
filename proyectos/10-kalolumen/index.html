@@ -56,7 +56,8 @@
 
 <div class="app">
   <header class="top">
-    <span class="ey">KALOLUMEN · REPLICA</span><b>Chest CTA — volume &amp; lumen</b>
+    <span class="ey">KALOLUMEN · REPLICA</span><b id="dsTitle">Chest CTA — volume &amp; lumen</b>
+    <div class="ctl">DATA <select id="dataset"><option value="ct">Chest CTA (public)</option></select></div>
     <div class="modes" id="modes">
       <button data-m="0" class="on">3DCG</button>
       <button data-m="1">X-ray sim</button>
@@ -99,27 +100,52 @@
 import * as THREE from '../../vendor/three.module.min.js';
 const $ = (id) => document.getElementById(id);
 
-const meta = await fetch('data/volume.json').then((r) => r.ok ? r.json() : null);
-if (!meta) {
+const DATASETS = {
+  ct: { base: 'data', title: 'Chest CTA — volume &amp; lumen', ramp: 0,
+        win: [-150, 750], winRange: [[-900, 800], [-400, 2000]], unit: ' HU', alpha: 38 },
+  rm: { base: '../../media/rm-mpr', title: 'Mi RM lumbar — volume &amp; lumen', ramp: 1,
+        win: [165, 245], winRange: [[0, 220], [40, 255]], unit: '', alpha: 13 },
+};
+async function fetchDS(id) {
+  const b = DATASETS[id].base;
+  const meta = await fetch(`${b}/volume.json`).then((r) => r.ok ? r.json() : null);
+  if (!meta) return null;
+  const buf = new Uint8Array(await fetch(`${b}/volume.bin`).then((r) => r.arrayBuffer()));
+  return { meta, buf };
+}
+const first = await fetchDS('ct');
+if (!first) {
   $('loading').textContent = 'Falta data/ (CTA-cardio no se redistribuye) — ver bootstrap.sh para regenerarla.';
   throw new Error('sin volumen');
 }
-const buf = new Uint8Array(await fetch('data/volume.bin').then((r) => r.arrayBuffer()));
+/* la RM personal solo aparece si existe en local */
+fetch('../../media/rm-mpr/volume.json').then((r) => {
+  if (r.ok) {
+    const o = document.createElement('option');
+    o.value = 'rm'; o.textContent = 'Mi RM lumbar (local)';
+    $('dataset').appendChild(o);
+  }
+});
+let { meta, buf } = first;
 const [NX, NY, NZ] = meta.dims;
 const size = [NX * meta.spacing[0], NY * meta.spacing[1], NZ * meta.spacing[2]];
 const maxDim = Math.max(...size);
-const box = size.map((s) => s / maxDim);   // caja normalizada
+let box = size.map((s) => s / maxDim);   // caja normalizada
 
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
 renderer.setClearColor(0x101216, 1);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
 
-const tex = new THREE.Data3DTexture(buf, NX, NY, NZ);
-tex.format = THREE.RedFormat;
-tex.minFilter = tex.magFilter = THREE.LinearFilter;
-tex.unpackAlignment = 1;
-tex.needsUpdate = true;
+function makeTex(buf, dims) {
+  const t = new THREE.Data3DTexture(buf, dims[0], dims[1], dims[2]);
+  t.format = THREE.RedFormat;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.unpackAlignment = 1;
+  t.needsUpdate = true;
+  return t;
+}
+let tex = makeTex(buf, meta.dims);
 
 const uniforms = {
   uMap: { value: tex },
@@ -128,6 +154,8 @@ const uniforms = {
   uLower: { value: -150 }, uUpper: { value: 750 },
   uHuMin: { value: meta.huMin }, uHuMax: { value: meta.huMax },
   uMode: { value: 0 },
+  uRamp: { value: 0 },
+  uAlpha: { value: 38.0 },
   uCutN: { value: new THREE.Vector3(0, 0, 1) },
   uCutD: { value: 0.55 }, uCutOn: { value: 1 },
 };
@@ -145,8 +173,8 @@ const mat = new THREE.ShaderMaterial({
     varying vec3 vPos;
     uniform sampler3D uMap;
     uniform vec3 uCam, uBox, uCutN;
-    uniform float uLower, uUpper, uHuMin, uHuMax, uCutD;
-    uniform int uMode, uCutOn;
+    uniform float uLower, uUpper, uHuMin, uHuMax, uCutD, uAlpha;
+    uniform int uMode, uCutOn, uRamp;
 
     float hu(vec3 p) {   // p en [0,1]^3
       float v = texture(uMap, p).r;
@@ -159,6 +187,7 @@ const mat = new THREE.ShaderMaterial({
       return vec2(max(max(tmin.x, tmin.y), tmin.z), min(min(tmax.x, tmax.y), tmax.z));
     }
     vec3 ramp(float t) {   // transfer: tejido pardo -> musculo rojizo -> hueso/contraste claro
+      if (uRamp == 1) { vec3 g = vec3(t); return mix(g, vec3(0.82, 0.88, 1.0) * t, 0.35); }
       vec3 a = vec3(0.42, 0.22, 0.15);
       vec3 b = vec3(0.72, 0.40, 0.28);
       vec3 c = vec3(0.95, 0.92, 0.86);
@@ -186,7 +215,7 @@ const mat = new THREE.ShaderMaterial({
         } else {
           float s = smoothstep(uLower, uUpper, h);
           if (s > 0.002) {
-            float a = s * s * dt * 38.0;
+            float a = s * s * dt * uAlpha;
             // sombreado por gradiente barato
             float g = hu(uvw + vec3(0.006, 0.0, 0.0)) - h;
             float shade = clamp(1.0 - g * 0.002, 0.55, 1.15);
@@ -240,8 +269,13 @@ $('cutPos').addEventListener('input', applyCut);
 
 /* ---------- MPR ---------- */
 const series = {};
-for (const k of ['axial', 'coronal', 'sagital'])
-  series[k] = (await fetch(`data/${k}/index.json`).then((r) => r.json())).files.map((f) => `data/${k}/${f}`);
+async function loadSeries(base) {
+  for (const k of ['axial', 'coronal', 'sagital']) {
+    const j = await fetch(`${base}/${k}/index.json`).then((r) => r.ok ? r.json() : null);
+    series[k] = j ? j.files.map((f) => `${base}/${k}/${f}`) : [];
+  }
+}
+await loadSeries('data');
 const st = {
   axial: { i: Math.floor(series.axial.length / 2), img: 'axImg', n: 'axN', bar: 'axBar' },
   coronal: { i: Math.floor(series.coronal.length / 2), img: 'coImg', n: 'coN', bar: 'coBar' },
@@ -260,6 +294,40 @@ for (const mp of document.querySelectorAll('.mp'))
     e.preventDefault();
     setSlice(mp.dataset.s, st[mp.dataset.s].i + (e.deltaY > 0 ? 1 : -1));
   }, { passive: false });
+
+/* ---------- cambio de dataset ---------- */
+$('dataset').addEventListener('change', async () => {
+  const id = $('dataset').value;
+  const cfg = DATASETS[id];
+  $('loading2') || 0;
+  const ds = await fetchDS(id);
+  if (!ds) return;
+  meta = ds.meta;
+  tex.dispose();
+  tex = makeTex(ds.buf, meta.dims);
+  uniforms.uMap.value = tex;
+  uniforms.uHuMin.value = meta.huMin; uniforms.uHuMax.value = meta.huMax;
+  uniforms.uRamp.value = cfg.ramp;
+  uniforms.uAlpha.value = cfg.alpha;
+  const sz = [meta.dims[0] * meta.spacing[0], meta.dims[1] * meta.spacing[1], meta.dims[2] * meta.spacing[2]];
+  const mx = Math.max(...sz);
+  box = sz.map((v) => v / mx);
+  mesh.geometry.dispose();
+  mesh.geometry = new THREE.BoxGeometry(...box);
+  edges.geometry.dispose();
+  edges.geometry = new THREE.EdgesGeometry(mesh.geometry);
+  uniforms.uBox.value.set(...box);
+  $('dsTitle').innerHTML = cfg.title;
+  $('lower').min = cfg.winRange[0][0]; $('lower').max = cfg.winRange[0][1];
+  $('upper').min = cfg.winRange[1][0]; $('upper').max = cfg.winRange[1][1];
+  $('lower').value = cfg.win[0]; $('upper').value = cfg.win[1];
+  uniforms.uLower.value = cfg.win[0]; uniforms.uUpper.value = cfg.win[1];
+  $('lowerV').textContent = cfg.win[0] + cfg.unit;
+  $('upperV').textContent = cfg.win[1] + cfg.unit;
+  await loadSeries(cfg.base);
+  for (const k of Object.keys(st)) setSlice(k, Math.floor(series[k].length / 2));
+  applyCut();
+});
 
 /* ---------- camara (orbita el volumen; el rayo se lanza en espacio objeto) ---------- */
 /* el volumen NRRD esta en RAS: +x der, +y ant, +z sup -> three: y arriba = z_ras */
