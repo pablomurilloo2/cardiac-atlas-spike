@@ -165,6 +165,10 @@ except Exception as e:
 # Blender 5 ya no codifica video directo: PNGs y ensamblar con ffmpeg afuera
 scene.render.image_settings.file_format = 'PNG'
 scene.render.filepath = OUT  # aqui OUT es un prefijo de carpeta/frames
-print('render ->', OUT)
-bpy.ops.render.render(animation=True)
+if OUT.endswith('.blend'):
+    bpy.ops.wm.save_as_mainfile(filepath=OUT)
+    print('escena guardada ->', OUT)
+else:
+    print('render ->', OUT)
+    bpy.ops.render.render(animation=True)
 print('LISTO')
