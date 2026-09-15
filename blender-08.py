@@ -36,6 +36,10 @@ world.node_tree.nodes['Background'].inputs[0].default_value = (0.004, 0.005, 0.0
 # ---------- cerebro: multiples objetos separados, material por clase ----------
 bpy.ops.wm.obj_import(filepath=OBJ)
 parts = list(bpy.context.selected_objects)
+# hornear TODA transformacion del importador en las mallas: un solo espacio, matrices identidad
+for ob in parts: ob.select_set(True)
+bpy.context.view_layer.objects.active = parts[0]
+bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 bpy.ops.object.shade_smooth()
 
 def hex2rgb(h):
@@ -95,37 +99,41 @@ for ob in parts:
     scene.collection.objects.unlink(ob)
     coll_for(grp).objects.link(ob)
 
-# ---------- nube de neuronas dentro del cerebro ----------
-# muestreo por rechazo con BVH del propio cerebro (paridad de intersecciones)
-import mathutils
-from mathutils.bvhtree import BVHTree
-deps = bpy.context.evaluated_depsgraph_get()
-bvhs = [BVHTree.FromObject(ob, deps) for ob in brainshells]
-allc = [Vector(c) for ob in brainshells for c in ob.bound_box]   # local: igual que los BVH
-lo = Vector((min(c.x for c in allc), min(c.y for c in allc), min(c.z for c in allc)))
-hi = Vector((max(c.x for c in allc), max(c.y for c in allc), max(c.z for c in allc)))
-
-def inside(p):
-    for bvh in bvhs:
-        loc, normal, _i, dist = bvh.find_nearest(p)
-        if loc is not None and (p - loc).dot(normal) < 0.0 and dist < 0.35:
-            return True
-    return False
-
-pts = []
-attempts = 0
-while len(pts) < N_NEURONS and attempts < N_NEURONS * 40:
-    attempts += 1
-    p = Vector((random.uniform(lo.x, hi.x), random.uniform(lo.y, hi.y), random.uniform(lo.z, hi.z)))
-    if inside(p):
-        pts.append(p)
-print('neuronas dentro:', len(pts), 'intentos:', attempts)
+# ---------- nube de neuronas: capa cortical (superficie real, hacia adentro) ----------
+import numpy as np
+from mathutils import Vector
+Vs, Fs, off = [], [], 0
+for ob in brainshells:
+    me = ob.data
+    n_v = len(me.vertices)
+    co = np.empty(n_v * 3)
+    me.vertices.foreach_get('co', co)
+    Vs.append(co.reshape(-1, 3))
+    me.calc_loop_triangles()
+    n_t = len(me.loop_triangles)
+    tri = np.empty(n_t * 3, dtype=np.int64)
+    me.loop_triangles.foreach_get('vertices', tri)
+    Fs.append(tri.reshape(-1, 3) + off)
+    off += n_v
+V = np.vstack(Vs); F = np.vstack(Fs)
+A, B, C = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+cr = np.cross(B - A, C - A)
+area = np.linalg.norm(cr, axis=1) / 2
+nrm = cr / (np.linalg.norm(cr, axis=1, keepdims=True) + 1e-12)
+rng = np.random.default_rng(8)
+fi = rng.choice(len(F), size=N_NEURONS, p=area / area.sum())
+r1 = np.sqrt(rng.random(N_NEURONS)); r2 = rng.random(N_NEURONS)
+P = A[fi] * (1 - r1)[:, None] + B[fi] * (r1 * (1 - r2))[:, None] + C[fi] * (r1 * r2)[:, None]
+depth = rng.uniform(0.004, 0.035, N_NEURONS)[:, None]   # 0.4-3.5 mm bajo la superficie
+pts = P - nrm[fi] * depth
+lo = Vector(tuple(V.min(0))); hi = Vector(tuple(V.max(0)))
+print('neuronas dentro:', len(pts), '(capa cortical, exacto por construccion)')
 
 mesh = bpy.data.meshes.new('neurons')
-mesh.from_pydata([tuple(p) for p in pts], [], [])
+mesh.from_pydata([tuple(map(float, p)) for p in pts], [], [])
 cloud = bpy.data.objects.new('neurons', mesh)
 scene.collection.objects.link(cloud)
-cloud.matrix_world = brain.matrix_world.copy()   # misma rotacion que el cerebro importado
+# matrices identidad tras transform_apply: la nube comparte espacio sin ajustes
 
 # instancia esferas diminutas emisivas via geometry nodes
 mod = cloud.modifiers.new('gn', 'NODES')
@@ -221,6 +229,14 @@ if OUT.endswith('.blend'):
                 for sp in area.spaces:
                     if sp.type == 'VIEW_3D':
                         sp.shading.type = 'MATERIAL'
+    def bbox_center(ob):
+        import numpy as _np
+        vs = _np.array([v.co[:] for v in ob.data.vertices])
+        return vs.min(0), vs.max(0)
+    blo, bhi = bbox_center(brain)
+    nlo, nhi = bbox_center(cloud)
+    print('VERIFICACION cerebro lo/hi:', [round(x,3) for x in blo], [round(x,3) for x in bhi])
+    print('VERIFICACION neuronas lo/hi:', [round(x,3) for x in nlo], [round(x,3) for x in nhi])
     bpy.ops.wm.save_as_mainfile(filepath=OUT)
     print('escena guardada ->', OUT)
 else:
