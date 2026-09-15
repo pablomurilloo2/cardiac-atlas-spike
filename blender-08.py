@@ -82,13 +82,26 @@ for ob in parts:
         brainshells.append(ob)
 brain = brainshells[0]    # referencia para bbox/anclas
 
+# organizar en colecciones por grupo (toggle de un clic en el Outliner)
+colls = {}
+def coll_for(name):
+    if name not in colls:
+        c = bpy.data.collections.new(name)
+        scene.collection.children.link(c)
+        colls[name] = c
+    return colls[name]
+for ob in parts:
+    grp = ob.name.split('__')[0] if '__' in ob.name else 'otros'
+    scene.collection.objects.unlink(ob)
+    coll_for(grp).objects.link(ob)
+
 # ---------- nube de neuronas dentro del cerebro ----------
 # muestreo por rechazo con BVH del propio cerebro (paridad de intersecciones)
 import mathutils
 from mathutils.bvhtree import BVHTree
 deps = bpy.context.evaluated_depsgraph_get()
 bvhs = [BVHTree.FromObject(ob, deps) for ob in brainshells]
-allc = [ob.matrix_world @ Vector(c) for ob in brainshells for c in ob.bound_box]
+allc = [Vector(c) for ob in brainshells for c in ob.bound_box]   # local: igual que los BVH
 lo = Vector((min(c.x for c in allc), min(c.y for c in allc), min(c.z for c in allc)))
 hi = Vector((max(c.x for c in allc), max(c.y for c in allc), max(c.z for c in allc)))
 
@@ -112,6 +125,7 @@ mesh = bpy.data.meshes.new('neurons')
 mesh.from_pydata([tuple(p) for p in pts], [], [])
 cloud = bpy.data.objects.new('neurons', mesh)
 scene.collection.objects.link(cloud)
+cloud.matrix_world = brain.matrix_world.copy()   # misma rotacion que el cerebro importado
 
 # instancia esferas diminutas emisivas via geometry nodes
 mod = cloud.modifiers.new('gn', 'NODES')
@@ -144,9 +158,12 @@ scene.collection.objects.link(key)
 cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
 scene.collection.objects.link(cam)
 scene.camera = cam
-center = (lo + hi) / 2
+wc = [ob.matrix_world @ Vector(c) for ob in brainshells for c in ob.bound_box]
+wlo = Vector((min(c.x for c in wc), min(c.y for c in wc), min(c.z for c in wc)))
+whi = Vector((max(c.x for c in wc), max(c.y for c in wc), max(c.z for c in wc)))
+center = (wlo + whi) / 2
 import math
-radius = (hi - lo).length * 1.55
+radius = (whi - wlo).length * 1.55
 for f in range(1, FRAMES + 1):
     a = 2 * math.pi * (f / FRAMES) * 0.35 + 0.6
     cam.location = (center.x + radius * math.sin(a), center.y - radius * math.cos(a),
@@ -196,6 +213,14 @@ except Exception as e:
 scene.render.image_settings.file_format = 'PNG'
 scene.render.filepath = OUT  # aqui OUT es un prefijo de carpeta/frames
 if OUT.endswith('.blend'):
+    if 'cerebrum' in colls:
+        colls['cerebrum'].hide_viewport = True     # ver el sistema nervioso sin la masa
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            if area.type == 'VIEW_3D':
+                for sp in area.spaces:
+                    if sp.type == 'VIEW_3D':
+                        sp.shading.type = 'MATERIAL'
     bpy.ops.wm.save_as_mainfile(filepath=OUT)
     print('escena guardada ->', OUT)
 else:
