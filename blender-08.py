@@ -33,41 +33,71 @@ world = bpy.data.worlds.new('w'); scene.world = world
 world.use_nodes = True
 world.node_tree.nodes['Background'].inputs[0].default_value = (0.004, 0.005, 0.010, 1)
 
-# ---------- cerebro ----------
+# ---------- cerebro: multiples objetos separados, material por clase ----------
 bpy.ops.wm.obj_import(filepath=OBJ)
-brain = bpy.context.selected_objects[0]
-brain.name = 'brain'
+parts = list(bpy.context.selected_objects)
 bpy.ops.object.shade_smooth()
-mat = bpy.data.materials.new('brainGlass')
-mat.use_nodes = True
-bsdf = mat.node_tree.nodes['Principled BSDF']
-bsdf.inputs['Base Color'].default_value = (0.35, 0.55, 0.85, 1)
-bsdf.inputs['Roughness'].default_value = 0.25
-bsdf.inputs['Transmission Weight'].default_value = 0.0
-bsdf.inputs['Alpha'].default_value = 0.16
-if 'Emission Color' in bsdf.inputs:
-    bsdf.inputs['Emission Color'].default_value = (0.10, 0.22, 0.45, 1)
-    bsdf.inputs['Emission Strength'].default_value = 0.25
-mat.blend_method = 'BLEND'
-brain.data.materials.clear()
-brain.data.materials.append(mat)
+
+def hex2rgb(h):
+    return tuple(int(h[i:i+2], 16) / 255 for i in (1, 3, 5))
+
+CLS = [
+    ('ventricle', ('ventricle', 'aqueduct'),                    '#7FD8E8', 0.95, 0.8),
+    ('callosum',  ('corpus_callosum',),                         '#E8C46B', 0.95, 0.8),
+    ('fornix',    ('fornix', 'commissure'),                     '#D8906B', 0.95, 0.6),
+    ('thalamus',  ('thalam',),                                  '#C86FA8', 0.95, 0.8),
+    ('hippo',     ('hippocamp', 'amygdal'),                     '#6FC8A8', 0.95, 0.8),
+    ('basal',     ('caudate', 'putamen', 'pallidus'),           '#6F9FE8', 0.95, 0.8),
+    ('brainstem', ('midbrain', 'pons', 'medulla', 'peduncle'),  '#E8A46B', 0.6, 0.4),
+    ('cerebellum',('cerebell',),                                '#B87F98', 0.4, 0.2),
+    ('cortex',    (),                                           '#598CD9', 0.10, 0.1),
+]
+mats = {}
+def mat_for(cls, hexcol, alpha, emis):
+    if cls in mats: return mats[cls]
+    m = bpy.data.materials.new('m_' + cls); m.use_nodes = True
+    b = m.node_tree.nodes['Principled BSDF']
+    rgb = hex2rgb(hexcol)
+    b.inputs['Base Color'].default_value = (*rgb, 1)
+    b.inputs['Roughness'].default_value = 0.3
+    b.inputs['Alpha'].default_value = alpha
+    if 'Emission Color' in b.inputs:
+        b.inputs['Emission Color'].default_value = (*rgb, 1)
+        b.inputs['Emission Strength'].default_value = emis
+    m.blend_method = 'BLEND'
+    mats[cls] = m
+    return m
+
+brainshells = []          # cascarones para sembrar neuronas (corteza+cerebelo+tronco)
+for ob in parts:
+    n = ob.name.lower()
+    cls, hexcol, alpha, emis = 'cortex', '#598CD9', 0.10, 0.1
+    for c, keys, hx, al, em in CLS:
+        if any(k in n for k in keys):
+            cls, hexcol, alpha, emis = c, hx, al, em
+            break
+    ob.data.materials.clear()
+    ob.data.materials.append(mat_for(cls, hexcol, alpha, emis))
+    if cls in ('cortex', 'cerebellum', 'brainstem'):
+        brainshells.append(ob)
+brain = brainshells[0]    # referencia para bbox/anclas
 
 # ---------- nube de neuronas dentro del cerebro ----------
 # muestreo por rechazo con BVH del propio cerebro (paridad de intersecciones)
 import mathutils
 from mathutils.bvhtree import BVHTree
 deps = bpy.context.evaluated_depsgraph_get()
-bvh = BVHTree.FromObject(brain, deps)
-bb = [brain.matrix_world @ Vector(c) for c in brain.bound_box]
-lo = Vector((min(c.x for c in bb), min(c.y for c in bb), min(c.z for c in bb)))
-hi = Vector((max(c.x for c in bb), max(c.y for c in bb), max(c.z for c in bb)))
+bvhs = [BVHTree.FromObject(ob, deps) for ob in brainshells]
+allc = [ob.matrix_world @ Vector(c) for ob in brainshells for c in ob.bound_box]
+lo = Vector((min(c.x for c in allc), min(c.y for c in allc), min(c.z for c in allc)))
+hi = Vector((max(c.x for c in allc), max(c.y for c in allc), max(c.z for c in allc)))
 
 def inside(p):
-    # punto mas cercano + signo de la normal: rapido y suficiente por cascaron
-    loc, normal, _i, dist = bvh.find_nearest(p)
-    if loc is None:
-        return False
-    return (p - loc).dot(normal) < 0.0
+    for bvh in bvhs:
+        loc, normal, _i, dist = bvh.find_nearest(p)
+        if loc is not None and (p - loc).dot(normal) < 0.0 and dist < 0.35:
+            return True
+    return False
 
 pts = []
 attempts = 0
